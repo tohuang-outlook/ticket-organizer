@@ -77,7 +77,7 @@ struct ContentView: View {
             Sidebar(store: store, selection: $selection, showNew: $showNew)
         } detail: {
             VStack(spacing: 0) {
-                HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "全部工单笔记").font(.largeTitle.bold()); Text("记录 RITM、CHG 与实施步骤，完成后移动到审批队列。").foregroundStyle(.secondary).font(.subheadline) }; Spacer(); Button { showNew = true } label: { Label("新建笔记", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
+                HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "全部工单笔记").font(.system(size: 48, weight: .bold)); Text("记录 RITM、CHG 与实施步骤，完成后移动到审批队列。").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("新建笔记", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
                 Divider()
                 HStack { TextField("搜索 RITM、CHG 或笔记内容", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("优先级", selection: $priority) { Text("全部优先级").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) 条记录").foregroundStyle(.secondary).font(.caption) }.padding(.horizontal, 28).padding(.vertical, 14)
                 List(selection: $selectedNote) { Section { ForEach(filtered) { note in NoteRow(note: note).tag(Optional(note)) } } header: { TableHeader() } }.listStyle(.inset)
@@ -89,7 +89,7 @@ struct ContentView: View {
 
 struct Sidebar: View {
     @ObservedObject var store: TicketStore; @Binding var selection: TicketStage?; @Binding var showNew: Bool
-    var body: some View { List { Section { Button { selection = nil } label: { Label("全部笔记", systemImage: "tray.full") }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("工单笔记") }; Section("流程") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.caption) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("新建工单笔记", systemImage: "plus.circle") }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
+    var body: some View { List { Section { Button { selection = nil } label: { Label("全部笔记", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("工单笔记").font(.system(size: 14, weight: .semibold)) }; Section("流程") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("新建工单笔记", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
 }
 
 struct TableHeader: View { var body: some View { HStack { Text("工单编号").frame(width: 180, alignment: .leading); Text("流程状态").frame(width: 135, alignment: .leading); Text("优先级").frame(width: 75, alignment: .leading); Text("笔记内容").frame(maxWidth: .infinity, alignment: .leading); Text("负责人").frame(width: 110, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }
@@ -97,10 +97,10 @@ struct NoteRow: View {
     let note: TicketNote
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 3) { Text(note.ritm).font(.system(.caption, design: .monospaced)).bold(); Text(note.chg).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary) }.frame(width: 180, alignment: .leading)
+            VStack(alignment: .leading, spacing: 3) { Text(note.ritm).font(.system(size: 16, design: .monospaced)).bold(); Text(note.chg).font(.system(size: 16, design: .monospaced)).foregroundStyle(.secondary) }.frame(width: 180, alignment: .leading)
             Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
             Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)
-            VStack(alignment: .leading, spacing: 3) { Text(note.title).fontWeight(.semibold); Text(note.body.replacingOccurrences(of: "\n", with: " · ")).lineLimit(1).font(.caption).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 3) { Text(note.title).font(.system(size: 16, weight: .semibold)); Text(note.body.replacingOccurrences(of: "\n", with: " · ")).lineLimit(1).font(.system(size: 14)).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading)
             Text(note.owner).font(.caption).frame(width: 110, alignment: .leading)
         }.padding(.vertical, 6)
     }

@@ -15,11 +15,11 @@ struct TicketOrganizerApp: App {
 extension Notification.Name { static let newTicket = Notification.Name("newTicket") }
 
 enum TicketStage: String, Codable, CaseIterable, Identifiable {
-    case draft, approval, example
+    case draft, approval, approved, example
     var id: String { rawValue }
-    var title: String { switch self { case .draft: "Draft"; case .approval: "UCSF ticket send for approve"; case .example: "UCSF ticket example" } }
-    var shortTitle: String { switch self { case .draft: "Draft"; case .approval: "Pending Approval"; case .example: "Examples" } }
-    var color: Color { switch self { case .draft: .secondary; case .approval: .orange; case .example: .purple } }
+    var title: String { switch self { case .draft: "Draft"; case .approval: "UCSF ticket send for approve"; case .approved: "Approved"; case .example: "UCSF ticket example" } }
+    var shortTitle: String { switch self { case .draft: "Draft"; case .approval: "Pending Approval"; case .approved: "Approved"; case .example: "Examples" } }
+    var color: Color { switch self { case .draft: .secondary; case .approval: .orange; case .approved: .green; case .example: .purple } }
 }
 
 enum Priority: String, Codable, CaseIterable, Identifiable {
@@ -144,7 +144,7 @@ struct ContentView: View {
 
 struct Sidebar: View {
     @ObservedObject var store: TicketStore; @Binding var selection: TicketStage?; @Binding var showNew: Bool
-    var body: some View { List { Section { Button { selection = nil } label: { Label("All Notes", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("Ticket Notes").font(.system(size: 14, weight: .semibold)) }; Section("Workflow") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
+    var body: some View { List { Section { Button { selection = nil } label: { Label("All Notes", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("Ticket Notes").font(.system(size: 14, weight: .semibold)) }; Section("Workflow") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : stage == .approved ? "checkmark.circle" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
 }
 
 struct TableHeader: View { var body: some View { HStack { Text("Ticket Numbers").frame(width: 180, alignment: .leading); Text("Status").frame(width: 135, alignment: .leading); Text("Priority").frame(width: 75, alignment: .leading); Text("Notes").frame(maxWidth: .infinity, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }

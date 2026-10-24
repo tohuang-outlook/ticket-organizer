@@ -2,6 +2,45 @@ import XCTest
 @testable import TicketOrganizer
 
 final class TicketStoreTests: XCTestCase {
+    @MainActor
+    func testWorkflowDropsPersistWithoutChangingNoteOrCreationTime() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        var original = makeNote()
+        original.richBody = Data([1, 2, 3])
+        try store.add(original)
+        for stage in TicketStage.allCases {
+            try store.moveTicket(id: original.id, to: stage)
+            let moved = try XCTUnwrap(TicketStore(url: url).notes.first)
+            XCTAssertEqual(moved.stage, stage)
+            XCTAssertEqual(moved.createdAt, original.createdAt)
+            XCTAssertEqual(moved.body, original.body)
+            XCTAssertEqual(moved.richBody, original.richBody)
+        }
+        XCTAssertThrowsError(try store.moveTicket(id: UUID(), to: .approved))
+        XCTAssertEqual(store.notes.count, 1)
+    }
+
+    @MainActor
+    func testEditorDoesNotRevertWorkflowDropWhenStatusWasUntouched() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = TicketStore(url: folder.appendingPathComponent("tickets.json"))
+        let original = makeNote()
+        try store.add(original)
+        try store.moveTicket(id: original.id, to: .approved)
+        var editor = original
+        editor.body = "Edited while dragging"
+        try store.update(editor, originalStage: original.stage)
+        XCTAssertEqual(store.notes.first?.stage, .approved)
+        XCTAssertEqual(store.notes.first?.body, editor.body)
+        editor.stage = .example
+        try store.update(editor, originalStage: original.stage)
+        XCTAssertEqual(store.notes.first?.stage, .example)
+    }
+
     private func makeNote() -> TicketNote {
         TicketNote(ritm: "RITM001", chg: "CHG001", title: "Test ticket", body: "Notes", stage: .draft, priority: .medium, owner: "", createdAt: Date(timeIntervalSince1970: 1600000000))
     }

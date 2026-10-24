@@ -43,11 +43,24 @@ final class TicketStore: ObservableObject {
         try commit(next)
     }
 
-    func update(_ note: TicketNote) throws {
+    func update(_ note: TicketNote, originalStage: TicketStage? = nil) throws {
         guard let index = notes.firstIndex(where: { $0.id == note.id }) else { throw StoreError.missingTicket }
         var next = notes
         next[index] = note
+        // An open editor must not undo a drag if its Status field was untouched.
+        if let originalStage, note.stage == originalStage {
+            next[index].stage = notes[index].stage
+        }
         next[index].createdAt = notes[index].createdAt
+        next[index].updatedAt = Date()
+        try commit(next)
+    }
+
+    func moveTicket(id: UUID, to stage: TicketStage) throws {
+        guard let index = notes.firstIndex(where: { $0.id == id }) else { throw StoreError.missingTicket }
+        guard notes[index].stage != stage else { return }
+        var next = notes
+        next[index].stage = stage
         next[index].updatedAt = Date()
         try commit(next)
     }

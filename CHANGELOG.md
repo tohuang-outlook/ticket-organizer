@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.2
+
+- Drag tickets onto Draft, Pending Approval, Approved, or Examples in the sidebar to move them.
+- Highlight valid workflow drop targets and show the moved ticket in the destination list.
+- Save moves atomically while preserving note text, formatting, and creation time.
+- Preserve dragged workflow changes when saving an already-open editor whose Status field was not changed.
+
 ## 1.1.1
 
 - Fix native Swift Package Manager builds by giving the SwiftUI @main entry-point file a non-reserved filename.

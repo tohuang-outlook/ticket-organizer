@@ -99,7 +99,7 @@ struct ContentView: View {
         guard let note = store.notes.first(where: { $0.id == id }) else { return }
         selectedID = id
         TicketEditorWindows.shared.open(note: note) { updated in
-            try store.update(updated)
+            try store.update(updated, originalStage: note.stage)
         }
     }
 
@@ -110,7 +110,7 @@ struct ContentView: View {
     }
     var body: some View {
         NavigationSplitView {
-            Sidebar(store: store, selection: $selection, showNew: $showNew)
+            Sidebar(store: store, selection: $selection, showNew: $showNew, onMoved: { selectedID = $0 })
         } detail: {
             VStack(spacing: 0) {
                 HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "All Ticket Notes").font(.system(size: 48, weight: .bold)); Text("Keep RITM, CHG, and implementation notes together. Send them for approval when ready.").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("New Note", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
@@ -125,6 +125,11 @@ struct ContentView: View {
                     Section {
                         ForEach(filtered) { note in
                             NoteRow(note: note).tag(note.id).contentShape(Rectangle())
+                                .draggable(TicketDragItem(id: note.id)) {
+                                    Label("\(note.ritm) / \(note.chg)", systemImage: "note.text")
+                                        .padding(10)
+                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                }
                         }
                     } header: { TableHeader(newestFirst: $newestFirst) }
                 }
@@ -163,8 +168,35 @@ struct ContentView: View {
 }
 
 struct Sidebar: View {
-    @ObservedObject var store: TicketStore; @Binding var selection: TicketStage?; @Binding var showNew: Bool
-    var body: some View { List { Section { Button { selection = nil } label: { Label("All Notes", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("Ticket Notes").font(.system(size: 14, weight: .semibold)) }; Section("Workflow") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : stage == .approved ? "checkmark.circle" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
+    @ObservedObject var store: TicketStore
+    @Binding var selection: TicketStage?
+    @Binding var showNew: Bool
+    var onMoved: (UUID) -> Void
+
+    var body: some View {
+        List {
+            Section {
+                Button { selection = nil } label: {
+                    Label("All Notes", systemImage: "tray.full").font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(selection == nil ? .primary : .secondary)
+            } header: {
+                Text("Ticket Notes").font(.system(size: 14, weight: .semibold))
+            }
+            Section("Workflow") {
+                ForEach(TicketStage.allCases) { stage in
+                    WorkflowDropRow(store: store, stage: stage, selected: selection == stage,
+                                    onSelect: { selection = stage }, onMoved: onMoved)
+                }
+            }
+            Section {
+                Button { showNew = true } label: {
+                    Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 14))
+                }.buttonStyle(.plain)
+            }
+        }.listStyle(.sidebar).navigationTitle("Ticket Organizer")
+    }
 }
 
 struct TableHeader: View {

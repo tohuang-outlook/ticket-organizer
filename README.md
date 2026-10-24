@@ -6,6 +6,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 
 - Click once to select a ticket; double-click to open a movable, resizable editor.
 - Organize notes into Draft, Pending Approval, Approved, and Examples.
+- Drag a ticket onto a workflow in the sidebar to move it. The target highlights on hover; successful drops save immediately and open the destination list.
 - Choose a creation date and time when adding a note.
 - Click the Created column heading to switch between newest-first and oldest-first order.
 - Search RITM, CHG, titles, or note text; filter by priority.
@@ -57,7 +58,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.1.1 BUILD_NUMBER=15 ./scripts/build-app.sh
+MARKETING_VERSION=1.1.2 BUILD_NUMBER=16 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 

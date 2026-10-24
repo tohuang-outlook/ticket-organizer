@@ -57,7 +57,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.1.0 BUILD_NUMBER=14 ./scripts/build-app.sh
+MARKETING_VERSION=1.1.1 BUILD_NUMBER=15 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 

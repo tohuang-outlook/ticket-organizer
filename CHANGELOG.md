@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- Fix native Swift Package Manager builds by giving the SwiftUI @main entry-point file a non-reserved filename.
+
 ## 1.1.0
 
 - English interface with Draft, Pending Approval, Approved, and Examples.

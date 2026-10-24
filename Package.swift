@@ -5,5 +5,8 @@ let package = Package(
     name: "TicketOrganizer",
     platforms: [.macOS(.v14)],
     products: [.executable(name: "TicketOrganizer", targets: ["TicketOrganizer"])],
-    targets: [.executableTarget(name: "TicketOrganizer")]
+    targets: [
+        .executableTarget(name: "TicketOrganizer"),
+        .testTarget(name: "TicketOrganizerTests", dependencies: ["TicketOrganizer"])
+    ]
 )

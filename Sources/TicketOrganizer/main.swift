@@ -40,7 +40,37 @@ struct TicketNote: Identifiable, Codable, Hashable {
     var owner: String
     var updatedAt = Date()
     var richBody: Data? = nil
+    var createdAt = Date()
 }
+
+extension TicketNote {
+    enum CodingKeys: String, CodingKey {
+        case id, ritm, chg, title, body, stage, priority, owner, updatedAt, richBody, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        ritm = try values.decode(String.self, forKey: .ritm)
+        chg = try values.decode(String.self, forKey: .chg)
+        title = try values.decode(String.self, forKey: .title)
+        body = try values.decode(String.self, forKey: .body)
+        stage = try values.decode(TicketStage.self, forKey: .stage)
+        priority = try values.decode(Priority.self, forKey: .priority)
+        owner = try values.decodeIfPresent(String.self, forKey: .owner) ?? ""
+        updatedAt = try values.decode(Date.self, forKey: .updatedAt)
+        richBody = try values.decodeIfPresent(Data.self, forKey: .richBody)
+        // Earlier versions recorded only the last modification date.
+        createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? updatedAt
+    }
+}
+
+private let createdDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    return formatter
+}()
 
 @MainActor
 final class TicketStore: ObservableObject {
@@ -77,7 +107,14 @@ struct ContentView: View {
     @State private var query = ""
     @State private var showNew = false
     @State private var priority: Priority? = nil
-    private var filtered: [TicketNote] { store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) } }
+    @State private var newestFirst = true
+    private var filtered: [TicketNote] {
+        store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) }
+            .sorted {
+                if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
+                return newestFirst ? $0.createdAt > $1.createdAt : $0.createdAt < $1.createdAt
+            }
+    }
     private var selectedTicket: TicketNote? { filtered.first { $0.id == selectedID } }
 
     private func openTicket(_ id: UUID) {
@@ -111,7 +148,7 @@ struct ContentView: View {
                         ForEach(filtered) { note in
                             NoteRow(note: note).tag(note.id).contentShape(Rectangle())
                         }
-                    } header: { TableHeader() }
+                    } header: { TableHeader(newestFirst: $newestFirst) }
                 }
                 .listStyle(.inset)
                 .contextMenu(forSelectionType: UUID.self) { ids in
@@ -147,12 +184,31 @@ struct Sidebar: View {
     var body: some View { List { Section { Button { selection = nil } label: { Label("All Notes", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("Ticket Notes").font(.system(size: 14, weight: .semibold)) }; Section("Workflow") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : stage == .approved ? "checkmark.circle" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
 }
 
-struct TableHeader: View { var body: some View { HStack { Text("Ticket Numbers").frame(width: 180, alignment: .leading); Text("Status").frame(width: 135, alignment: .leading); Text("Priority").frame(width: 75, alignment: .leading); Text("Notes").frame(maxWidth: .infinity, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }
+struct TableHeader: View {
+    @Binding var newestFirst: Bool
+    var body: some View {
+        HStack {
+            Text("Ticket Numbers").frame(width: 180, alignment: .leading)
+            Button { newestFirst.toggle() } label: {
+                HStack(spacing: 5) { Text("Created"); Image(systemName: newestFirst ? "chevron.down" : "chevron.up") }
+            }
+            .buttonStyle(.plain)
+            .help(newestFirst ? "Newest first. Click for oldest first." : "Oldest first. Click for newest first.")
+            .accessibilityLabel("Sort by created time")
+            .accessibilityValue(newestFirst ? "Newest first" : "Oldest first")
+            .frame(width: 170, alignment: .leading)
+            Text("Status").frame(width: 135, alignment: .leading)
+            Text("Priority").frame(width: 75, alignment: .leading)
+            Text("Notes").frame(maxWidth: .infinity, alignment: .leading)
+        }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
+    }
+}
 struct NoteRow: View {
     let note: TicketNote
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 3) { Text(note.ritm).font(.system(size: 16, design: .monospaced)).bold(); Text(note.chg).font(.system(size: 16, design: .monospaced)).foregroundStyle(.secondary) }.frame(width: 180, alignment: .leading)
+            Text(createdDateFormatter.string(from: note.createdAt)).font(.system(size: 14)).monospacedDigit().frame(width: 170, alignment: .leading)
             Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
             Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) { Text(note.title).font(.system(size: 16, weight: .semibold)); Text(note.body.replacingOccurrences(of: "\n", with: " · ")).lineLimit(1).font(.system(size: 14)).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading)
@@ -167,13 +223,16 @@ struct NewTicketView: View {
     var onSave: (TicketNote) -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .medium
     @State private var richBody: Data?
+    @State private var createdAt = Date()
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Ticket Note").font(.title2.bold())
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
             TextField("Note title", text: $title)
+            DatePicker("Created", selection: $createdAt, displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.field)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
-            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
         }.padding(24).frame(width: 580)
     }
 }

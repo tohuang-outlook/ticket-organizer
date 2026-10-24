@@ -90,6 +90,6 @@ final class BoldNoteTextView: NSTextView {
         }
         insertText(replacement, replacementRange: range)
         setSelectedRange(range)
-        undoManager?.setActionName("切换粗体")
+        undoManager?.setActionName("Toggle Bold")
     }
 }

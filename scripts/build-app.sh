@@ -26,6 +26,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.tohuang.ticket-organizer</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>CFBundleName</key><string>Ticket Organizer</string>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
+<key>CFBundleLocalizations</key><array><string>en</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>__VERSION__</string>
 <key>CFBundleVersion</key><string>__BUILD__</string>

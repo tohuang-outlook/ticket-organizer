@@ -5,10 +5,10 @@ import AppKit
 @main
 struct TicketOrganizerApp: App {
     var body: some Scene {
-        WindowGroup("Ticket Organizer") { ContentView() }
+        WindowGroup("Ticket Organizer") { ContentView().environment(\.locale, Locale(identifier: "en")) }
             .windowStyle(.titleBar)
             .defaultSize(width: 1180, height: 760)
-            .commands { CommandGroup(after: .newItem) { Button("新建工单笔记") { NotificationCenter.default.post(name: .newTicket, object: nil) }.keyboardShortcut("n") } }
+            .commands { CommandGroup(after: .newItem) { Button("New Ticket Note") { NotificationCenter.default.post(name: .newTicket, object: nil) }.keyboardShortcut("n") } }
     }
 }
 
@@ -17,15 +17,15 @@ extension Notification.Name { static let newTicket = Notification.Name("newTicke
 enum TicketStage: String, Codable, CaseIterable, Identifiable {
     case draft, approval, example
     var id: String { rawValue }
-    var title: String { switch self { case .draft: "草稿"; case .approval: "UCSF ticket send for approve"; case .example: "UCSF ticket example" } }
-    var shortTitle: String { switch self { case .draft: "草稿"; case .approval: "待审批"; case .example: "示例" } }
+    var title: String { switch self { case .draft: "Draft"; case .approval: "UCSF ticket send for approve"; case .example: "UCSF ticket example" } }
+    var shortTitle: String { switch self { case .draft: "Draft"; case .approval: "Pending Approval"; case .example: "Examples" } }
     var color: Color { switch self { case .draft: .secondary; case .approval: .orange; case .example: .purple } }
 }
 
 enum Priority: String, Codable, CaseIterable, Identifiable {
     case high, medium, low
     var id: String { rawValue }
-    var title: String { switch self { case .high: "高"; case .medium: "中"; case .low: "低" } }
+    var title: String { switch self { case .high: "High"; case .medium: "Medium"; case .low: "Low" } }
     var color: Color { switch self { case .high: .red; case .medium: .orange; case .low: .green } }
 }
 
@@ -55,10 +55,10 @@ final class TicketStore: ObservableObject {
     func load() {
         if let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode([TicketNote].self, from: data) { notes = saved; return }
         notes = [
-            TicketNote(ritm: "RITM0767540", chg: "CHG0197325", title: "Panorama 添加共享地址对象和安全规则", body: "On Panorama, Device Group: ECDC_UCSF\nOn Panorama, Device Group: QUINCY_UCSF\n\n1. OBJECTS > Addresses，新增 shared address object\n2. POLICIES > Security > Pre Rules，新增规则\n3. Commit and push 到 QUINCY_UCSF device group", stage: .approval, priority: .high, owner: "Huang Chen"),
-            TicketNote(ritm: "RITM0767221", chg: "CHG0197291", title: "更新 QUINCY_UCSF 设备组策略", body: "补充 source zone、source address、destination zone、service 和 action 字段。", stage: .draft, priority: .medium, owner: "Huang Chen"),
-            TicketNote(ritm: "RITM0767014", chg: "CHG0197269", title: "共享地址对象配置示例", body: "已验证命名规则和设备组配置，可作为后续类似变更的参考。", stage: .example, priority: .low, owner: "Jia Li"),
-            TicketNote(ritm: "RITM0766903", chg: "CHG0197272", title: "Pre Rules 规则变更记录", body: "完成规则创建、检查和提交，等待最终审批反馈。", stage: .approval, priority: .medium, owner: "Huang Chen")
+            TicketNote(ritm: "RITM0767540", chg: "CHG0197325", title: "Panorama: Add shared address objects and security rules", body: "On Panorama, Device Group: ECDC_UCSF\nOn Panorama, Device Group: QUINCY_UCSF\n\n1. OBJECTS > Addresses: Add a shared address object\n2. POLICIES > Security > Pre Rules: Add a new rule\n3. Commit and push to the QUINCY_UCSF device group", stage: .approval, priority: .high, owner: "Huang Chen"),
+            TicketNote(ritm: "RITM0767221", chg: "CHG0197291", title: "Update QUINCY_UCSF device group policy", body: "Fill in source zone, source address, destination zone, service, and action.", stage: .draft, priority: .medium, owner: "Huang Chen"),
+            TicketNote(ritm: "RITM0767014", chg: "CHG0197269", title: "Shared address object configuration example", body: "Validated naming conventions and device group configuration. Use as a reference for similar changes.", stage: .example, priority: .low, owner: "Jia Li"),
+            TicketNote(ritm: "RITM0766903", chg: "CHG0197272", title: "Pre Rules change notes", body: "Rule creation, review, and commit are complete. Awaiting final approval.", stage: .approval, priority: .medium, owner: "Huang Chen")
         ]
     }
     func save() { if let data = try? JSONEncoder().encode(notes) { try? data.write(to: url, options: .atomic) } }
@@ -81,9 +81,9 @@ struct ContentView: View {
             Sidebar(store: store, selection: $selection, showNew: $showNew)
         } detail: {
             VStack(spacing: 0) {
-                HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "全部工单笔记").font(.system(size: 48, weight: .bold)); Text("记录 RITM、CHG 与实施步骤，完成后移动到审批队列。").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("新建笔记", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
+                HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "All Ticket Notes").font(.system(size: 48, weight: .bold)); Text("Keep RITM, CHG, and implementation notes together. Send them for approval when ready.").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("New Note", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
                 Divider()
-                HStack { TextField("搜索 RITM、CHG 或笔记内容", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("优先级", selection: $priority) { Text("全部优先级").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) 条记录").foregroundStyle(.secondary).font(.caption) }.padding(.horizontal, 28).padding(.vertical, 14)
+                HStack { TextField("Search RITM, CHG, or notes", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("Priority", selection: $priority) { Text("All Priorities").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) notes").foregroundStyle(.secondary).font(.caption) }.padding(.horizontal, 28).padding(.vertical, 14)
                 List(selection: $selectedNote) { Section { ForEach(filtered) { note in NoteRow(note: note).tag(Optional(note)).contentShape(Rectangle()).onTapGesture(count: 2) { TicketEditorWindows.shared.open(note: note) { store.update($0); selectedNote = $0 } } } } header: { TableHeader() } }.listStyle(.inset)
             }.sheet(isPresented: $showNew) { NewTicketView { store.add($0); selectedNote = $0 } }
         }.inspector(isPresented: Binding(get: { selectedNote != nil }, set: { if !$0 { selectedNote = nil } })) { if let note = selectedNote { DetailView(note: note, store: store, onDelete: { store.delete(note); selectedNote = nil }) } }
@@ -93,10 +93,10 @@ struct ContentView: View {
 
 struct Sidebar: View {
     @ObservedObject var store: TicketStore; @Binding var selection: TicketStage?; @Binding var showNew: Bool
-    var body: some View { List { Section { Button { selection = nil } label: { Label("全部笔记", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("工单笔记").font(.system(size: 14, weight: .semibold)) }; Section("流程") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("新建工单笔记", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
+    var body: some View { List { Section { Button { selection = nil } label: { Label("All Notes", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("Ticket Notes").font(.system(size: 14, weight: .semibold)) }; Section("Workflow") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
 }
 
-struct TableHeader: View { var body: some View { HStack { Text("工单编号").frame(width: 180, alignment: .leading); Text("流程状态").frame(width: 135, alignment: .leading); Text("优先级").frame(width: 75, alignment: .leading); Text("笔记内容").frame(maxWidth: .infinity, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }
+struct TableHeader: View { var body: some View { HStack { Text("Ticket Numbers").frame(width: 180, alignment: .leading); Text("Status").frame(width: 135, alignment: .leading); Text("Priority").frame(width: 75, alignment: .leading); Text("Notes").frame(maxWidth: .infinity, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }
 struct NoteRow: View {
     let note: TicketNote
     var body: some View {
@@ -109,7 +109,7 @@ struct NoteRow: View {
     }
 }
 
-struct DetailView: View { let note: TicketNote; @ObservedObject var store: TicketStore; var onDelete: () -> Void; @State private var confirmDelete = false; var body: some View { VStack(alignment: .leading, spacing: 18) { Text("工单详情").font(.headline); Text("\(note.ritm), \(note.chg)").font(.system(.title3, design: .monospaced)).bold(); Divider(); Text(note.title).font(.title2.bold()); Text(note.body).textSelection(.enabled); Spacer(); HStack { Button("移回草稿") { store.move(note, to: .draft) }.disabled(note.stage == .draft); Button("送审批") { store.move(note, to: .approval) }.disabled(note.stage == .approval); Button("设为示例") { store.move(note, to: .example) }.disabled(note.stage == .example); Spacer(); Button("删除工单", role: .destructive) { confirmDelete = true } }.buttonStyle(.borderedProminent) }.padding(24).frame(minWidth: 320, alignment: .leading).alert("删除这条工单？", isPresented: $confirmDelete) { Button("取消", role: .cancel) {}; Button("删除", role: .destructive) { onDelete() } } message: { Text("删除后将从列表和本地保存数据中移除，无法恢复。") } } }
+struct DetailView: View { let note: TicketNote; @ObservedObject var store: TicketStore; var onDelete: () -> Void; @State private var confirmDelete = false; var body: some View { VStack(alignment: .leading, spacing: 18) { Text("Ticket Details").font(.headline); Text("\(note.ritm), \(note.chg)").font(.system(.title3, design: .monospaced)).bold(); Divider(); Text(note.title).font(.title2.bold()); Text(note.body).textSelection(.enabled); Spacer(); HStack { Button("Move to Draft") { store.move(note, to: .draft) }.disabled(note.stage == .draft); Button("Send for Approval") { store.move(note, to: .approval) }.disabled(note.stage == .approval); Button("Save as Example") { store.move(note, to: .example) }.disabled(note.stage == .example); Spacer(); Button("Delete Ticket", role: .destructive) { confirmDelete = true } }.buttonStyle(.borderedProminent) }.padding(24).frame(minWidth: 320, alignment: .leading).alert("Delete this ticket?", isPresented: $confirmDelete) { Button("Cancel", role: .cancel) {}; Button("Delete", role: .destructive) { onDelete() } } message: { Text("This will permanently remove the ticket from your list and local storage. This action cannot be undone.") } } }
 
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
@@ -118,11 +118,11 @@ struct NewTicketView: View {
     @State private var richBody: Data?
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("新建工单笔记").font(.title2.bold())
+            Text("New Ticket Note").font(.title2.bold())
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
-            TextField("笔记标题", text: $title)
+            TextField("Note title", text: $title)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
-            HStack { Picker("优先级", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("取消") { dismiss() }; Button("保存为草稿") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
         }.padding(24).frame(width: 580)
     }
 }
@@ -147,12 +147,12 @@ struct EditTicketView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("编辑工单笔记").font(.title2.bold())
+            Text("Edit Ticket Note").font(.title2.bold())
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
-            TextField("笔记标题", text: $title)
+            TextField("Note title", text: $title)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
-            HStack { Picker("流程状态", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("优先级", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B 粗体").font(.caption).foregroundStyle(.secondary) }
-            HStack { Spacer(); Button("取消") { onClose() }.keyboardShortcut(.cancelAction); Button("保存修改") { var updated = original; updated.ritm = ritm; updated.chg = chg; updated.title = title; updated.body = bodyText; updated.stage = stage; updated.priority = priority; updated.richBody = richBody; onSave(updated); onClose() }.buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+            HStack { Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B Bold").font(.caption).foregroundStyle(.secondary) }
+            HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes") { var updated = original; updated.ritm = ritm; updated.chg = chg; updated.title = title; updated.body = bodyText; updated.stage = stage; updated.priority = priority; updated.richBody = richBody; onSave(updated); onClose() }.buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)
     }
 }
@@ -168,10 +168,10 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
             return
         }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 640), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "\(note.ritm) · \(note.chg) — 编辑笔记"
+        window.title = "\(note.ritm) · \(note.chg) — Edit Note"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentView = NSHostingView(rootView: EditTicketView(note: note, onClose: { [weak window] in window?.close() }, onSave: onSave))
+        window.contentView = NSHostingView(rootView: EditTicketView(note: note, onClose: { [weak window] in window?.close() }, onSave: onSave).environment(\.locale, Locale(identifier: "en")))
         window.contentMinSize = NSSize(width: 720, height: 480)
         windows[note.id] = window
         window.center()

@@ -1,7 +1,64 @@
 import XCTest
+import Darwin
 @testable import TicketOrganizer
 
 final class TicketStoreTests: XCTestCase {
+    @MainActor
+    func testBusyWriterLockFailsWithoutOverwritingData() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        let original = makeNote()
+        try store.add(original)
+        let before = try Data(contentsOf: url)
+        let descriptor = Darwin.open(url.appendingPathExtension("lock").path, O_RDWR)
+        XCTAssertGreaterThanOrEqual(descriptor, 0)
+        guard descriptor >= 0 else { return }
+        defer { flock(descriptor, LOCK_UN); Darwin.close(descriptor) }
+        XCTAssertEqual(flock(descriptor, LOCK_EX | LOCK_NB), 0)
+        XCTAssertThrowsError(try store.delete(original))
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertEqual(store.notes, [original])
+    }
+
+    @MainActor
+    func testSecondInstanceCannotOverwriteNewerSave() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let first = TicketStore(url: url)
+        let original = makeNote()
+        try first.add(original)
+        let second = TicketStore(url: url)
+        var updated = original
+        updated.title = "Saved by first instance"
+        try first.update(updated)
+        let savedData = try Data(contentsOf: url)
+        XCTAssertThrowsError(try second.delete(original))
+        XCTAssertEqual(try Data(contentsOf: url), savedData)
+        XCTAssertEqual(second.notes.first?.title, original.title)
+        XCTAssertEqual(TicketStore(url: url).notes.first?.title, updated.title)
+    }
+
+    @MainActor
+    func testRemovedDataFileCannotBeSilentlyRecreatedFromStaleMemory() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        let original = makeNote()
+        try store.add(original)
+        try FileManager.default.removeItem(at: url)
+        XCTAssertThrowsError(try store.update(original))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testClosedWorkflowFollowsExamplesAndRoundTrips() throws {
+        XCTAssertEqual(TicketStage.allCases.map(\.shortTitle), ["Draft", "Pending Approval", "Approved", "Examples", "Closed"])
+        XCTAssertEqual(try JSONDecoder().decode(TicketStage.self, from: JSONEncoder().encode(TicketStage.closed)), .closed)
+    }
+
     @MainActor
     func testRITMOnlyDraftCanBeSavedReopenedAndCompleted() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

@@ -11,6 +11,10 @@ if [[ -n "$ICLOUD_PROFILE" && ( ! -f "$ICLOUD_PROFILE" || -z "${SIGNING_IDENTITY
   echo "iCloud requires a valid provisioning profile and Apple signing identity." >&2
   exit 1
 fi
+if [[ "${REQUIRE_ICLOUD:-0}" == 1 && ( -z "$ICLOUD_PROFILE" || "${ICLOUD_ENVIRONMENT:-Production}" != Production ) ]]; then
+  echo "iCloud distribution requires a matching provisioning profile and the Production environment." >&2
+  exit 1
+fi
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! "$BUILD" =~ ^[0-9]+$ ]]; then
   echo "Version must be X.Y.Z and build number must be numeric." >&2
   exit 1

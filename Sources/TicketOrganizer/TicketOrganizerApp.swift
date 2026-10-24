@@ -4,6 +4,7 @@ import AppKit
 
 @main
 struct TicketOrganizerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = TicketStore()
     var body: some Scene {
         WindowGroup("Ticket Organizer") { ContentView(store: store).environment(\.locale, Locale(identifier: "en")) }
@@ -19,11 +20,11 @@ struct TicketOrganizerApp: App {
 extension Notification.Name { static let newTicket = Notification.Name("newTicket") }
 
 enum TicketStage: String, Codable, CaseIterable, Identifiable {
-    case draft, approval, approved, example
+    case draft, approval, approved, example, closed
     var id: String { rawValue }
-    var title: String { switch self { case .draft: "Draft"; case .approval: "UCSF ticket send for approve"; case .approved: "Approved"; case .example: "UCSF ticket example" } }
-    var shortTitle: String { switch self { case .draft: "Draft"; case .approval: "Pending Approval"; case .approved: "Approved"; case .example: "Examples" } }
-    var color: Color { switch self { case .draft: .secondary; case .approval: .orange; case .approved: .green; case .example: .purple } }
+    var title: String { switch self { case .draft: "Draft"; case .approval: "UCSF ticket send for approve"; case .approved: "Approved"; case .example: "UCSF ticket example"; case .closed: "Closed" } }
+    var shortTitle: String { switch self { case .draft: "Draft"; case .approval: "Pending Approval"; case .approved: "Approved"; case .example: "Examples"; case .closed: "Closed" } }
+    var color: Color { switch self { case .draft: .secondary; case .approval: .orange; case .approved: .green; case .example: .purple; case .closed: .gray } }
 }
 
 enum Priority: String, Codable, CaseIterable, Identifiable {
@@ -245,10 +246,14 @@ struct NewTicketView: View {
     var onSave: (TicketNote) throws -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
-    @State private var createdAt = Date()
+    @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
 
     private func saveNote() {
+        guard let createdAt = CreatedTimeInput.parse(createdTimeText) else {
+            saveError = "Enter a valid Created date and time using yyyy-MM-dd HH:mm:ss."
+            return
+        }
         do {
             try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt))
             dismiss()
@@ -261,8 +266,14 @@ struct NewTicketView: View {
                 .font(.caption).foregroundStyle(.secondary)
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
             TextField("Note title", text: $title)
-            DatePicker("Created", selection: $createdAt, displayedComponents: [.date, .hourAndMinute])
-                .datePickerStyle(.field)
+            LabeledContent("Created") {
+                TextField("yyyy-MM-dd HH:mm:ss", text: $createdTimeText)
+                    .monospacedDigit()
+                    .accessibilityLabel("Created date and time")
+                Button("Now") { createdTimeText = CreatedTimeInput.format(Date()) }
+            }
+            Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
+                .font(.caption).foregroundStyle(.secondary)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 580)

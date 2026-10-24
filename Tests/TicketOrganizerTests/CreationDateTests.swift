@@ -2,6 +2,27 @@ import XCTest
 @testable import TicketOrganizer
 
 final class CreationDateTests: XCTestCase {
+    func testManualCreationTimeValidatesLeapDaysAndMissingDSTHour() throws {
+        let zone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        XCTAssertNotNil(CreatedTimeInput.parse("2028-02-29 09:30:00", timeZone: zone))
+        XCTAssertNil(CreatedTimeInput.parse("2026-02-29 09:30:00", timeZone: zone))
+        XCTAssertNil(CreatedTimeInput.parse("2026-03-08 02:30:00", timeZone: zone))
+    }
+
+    func testManuallyEnteredCreationTimeRoundTripsWithSeconds() throws {
+        let zone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let text = "2026-10-23 21:37:04"
+        let date = try XCTUnwrap(CreatedTimeInput.parse(text, timeZone: zone))
+        XCTAssertEqual(CreatedTimeInput.format(date, timeZone: zone), text)
+        XCTAssertEqual(CreatedTimeInput.parse("  \(text)  ", timeZone: zone), date)
+    }
+
+    func testManualCreationTimeRejectsInvalidDatesAndFormats() {
+        for text in ["", "2026-02-30 12:00:00", "2026-13-01 12:00:00", "2026-10-23 25:00:00", "2026-10-23 12:00:60", "10/23/2026", "2026-1-2 01:02:03"] {
+            XCTAssertNil(CreatedTimeInput.parse(text), text)
+        }
+    }
+
     func testSortingUsesCreationTimeInsteadOfLastEditTime() {
         var older = note()
         var newer = note()

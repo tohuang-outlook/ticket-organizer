@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Darwin
 
 @MainActor
 final class TicketStore: ObservableObject {
@@ -8,6 +9,7 @@ final class TicketStore: ObservableObject {
     @Published var errorMessage: String?
     let url: URL
     private var canWrite = true
+    private var lastSavedData: Data?
     var onLocalChange: (() -> Void)?
     lazy var cloudSync = TicketCloudSync(store: self)
 
@@ -16,7 +18,9 @@ final class TicketStore: ObservableObject {
             .appendingPathComponent("TicketOrganizer/tickets.json")
         do {
             if FileManager.default.fileExists(atPath: self.url.path) {
-                archive = try TicketArchive.decode(Data(contentsOf: self.url))
+                let data = try Data(contentsOf: self.url)
+                archive = try TicketArchive.decode(data)
+                lastSavedData = data
                 notes = archive.notes
             }
         } catch {
@@ -29,8 +33,16 @@ final class TicketStore: ObservableObject {
         guard canWrite else { throw StoreError.unreadableFile }
         let data = try JSONEncoder().encode(next)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if FileManager.default.fileExists(atPath: url.path) {
-            let previous = try Data(contentsOf: url)
+        // Serialize writers across app instances, then reject stale snapshots.
+        // Atomic replacement alone protects file integrity, not lost updates.
+        let descriptor = Darwin.open(url.appendingPathExtension("lock").path, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { Darwin.close(descriptor) }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { throw StoreError.concurrentChange }
+        defer { flock(descriptor, LOCK_UN) }
+        let previous = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
+        guard previous == lastSavedData else { throw StoreError.concurrentChange }
+        if let previous {
             _ = try TicketArchive.decode(previous)
             let legacyBackup = url.appendingPathExtension("pre-icloud-backup")
             if (try? JSONDecoder().decode([TicketNote].self, from: previous)) != nil,
@@ -40,6 +52,7 @@ final class TicketStore: ObservableObject {
             try previous.write(to: url.appendingPathExtension("backup"), options: .atomic)
         }
         try data.write(to: url, options: .atomic)
+        lastSavedData = data
         archive = next
         notes = next.notes
         if localChange { onLocalChange?() }
@@ -131,7 +144,7 @@ final class TicketStore: ObservableObject {
     }
 
     enum StoreError: LocalizedError {
-        case unreadableFile, missingTicket, duplicateTicket, differentAccount, staleEditor
+        case unreadableFile, missingTicket, duplicateTicket, differentAccount, staleEditor, concurrentChange
         var errorDescription: String? {
             switch self {
             case .unreadableFile: "Notes cannot be saved because the existing data file could not be opened. Restore your data file, then restart the app."
@@ -139,6 +152,7 @@ final class TicketStore: ObservableObject {
             case .duplicateTicket: "A ticket with this identifier already exists."
             case .differentAccount: "Sync is paused because this Mac is using a different iCloud account. Sign in to the original account to resume. Your local notes have been kept."
             case .staleEditor: "This ticket changed since you opened it. Copy any unsaved text, close the editor, and reopen the ticket to see the latest version."
+            case .concurrentChange: "The notes file changed outside this app or is being saved by another instance. Nothing was overwritten. Copy any unsaved text, quit all copies of Ticket Organizer, and reopen the latest version."
             }
         }
     }

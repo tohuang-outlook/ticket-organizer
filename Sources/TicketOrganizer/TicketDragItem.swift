@@ -27,6 +27,7 @@ struct WorkflowDropRow: View {
         case .approval: "paperplane"
         case .approved: "checkmark.circle"
         case .example: "star"
+        case .closed: "archivebox"
         }
     }
 

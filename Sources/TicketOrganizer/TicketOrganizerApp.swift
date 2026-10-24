@@ -187,12 +187,12 @@ struct Sidebar: View {
         List {
             Section {
                 Button { selection = nil } label: {
-                    Label("All Notes", systemImage: "tray.full").font(.system(size: 14))
+                    Label("All Notes", systemImage: "tray.full").font(.system(size: 18))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(selection == nil ? .primary : .secondary)
             } header: {
-                Text("Ticket Notes").font(.system(size: 14, weight: .semibold))
+                Text("Ticket Notes").font(.system(size: 18, weight: .semibold))
             }
             Section("Workflow") {
                 ForEach(TicketStage.allCases) { stage in
@@ -202,7 +202,7 @@ struct Sidebar: View {
             }
             Section {
                 Button { showNew = true } label: {
-                    Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 14))
+                    Label("New Ticket Note", systemImage: "plus.circle").font(.system(size: 18))
                 }.buttonStyle(.plain)
             }
         }.listStyle(.sidebar).navigationTitle("Ticket Organizer")
@@ -226,20 +226,20 @@ struct TableHeader: View {
             Text("Status").frame(width: 135, alignment: .leading)
             Text("Priority").frame(width: 75, alignment: .leading)
             Text("Notes").frame(maxWidth: .infinity, alignment: .leading)
-        }.font(.system(size: 16)).foregroundStyle(.secondary)
+        }.font(.system(size: 18)).foregroundStyle(.secondary)
     }
 }
 struct NoteRow: View {
     let note: TicketNote
     var body: some View {
         HStack {
-            Text(note.ritm).font(.system(size: 16, design: .monospaced)).bold().lineLimit(1).help(note.ritm).frame(width: 140, alignment: .leading)
-            Text(note.chg).font(.system(size: 16, design: .monospaced)).lineLimit(1).help(note.chg).frame(width: 125, alignment: .leading)
+            Text(note.ritm).font(.system(size: 18, design: .monospaced)).bold().lineLimit(1).help(note.ritm).frame(width: 150, alignment: .leading)
+            Text(note.chg).font(.system(size: 18, design: .monospaced)).lineLimit(1).help(note.chg).frame(width: 135, alignment: .leading)
             Text(createdDateFormatter.string(from: note.createdAt)).monospacedDigit().lineLimit(1).frame(width: 190, alignment: .leading)
             Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
             Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)
             Text(note.title).fontWeight(.semibold).lineLimit(1).truncationMode(.tail).help(note.title).frame(maxWidth: .infinity, alignment: .leading)
-        }.font(.system(size: 16)).padding(.vertical, 6)
+        }.font(.system(size: 18)).padding(.vertical, 6)
     }
 }
 
@@ -249,6 +249,7 @@ struct NewTicketView: View {
     var onSave: (TicketNote) throws -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
+    @State private var bodyFontSize = 16
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
 
@@ -277,7 +278,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
-            RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
+            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 580)
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
@@ -296,12 +297,14 @@ struct EditTicketView: View {
     @State private var stage: TicketStage
     @State private var priority: Priority
     @State private var richBody: Data?
+    @State private var bodyFontSize: Int
     @State private var saveError: String?
 
     init(note: TicketNote, onClose: @escaping () -> Void, onDirtyChange: @escaping (Bool) -> Void, onSave: @escaping (TicketNote) throws -> Void) {
         original = note; self.onClose = onClose; self.onDirtyChange = onDirtyChange; self.onSave = onSave
         _ritm = State(initialValue: note.ritm); _chg = State(initialValue: note.chg); _title = State(initialValue: note.title)
         _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
+        _bodyFontSize = State(initialValue: RichNoteEditor.preferredFontSize(from: note.richBody))
     }
 
     private func saveNote() {
@@ -322,8 +325,8 @@ struct EditTicketView: View {
             Text("Edit Ticket Note").font(.title2.bold())
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
             TextField("Note title", text: $title)
-            RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
-            HStack { Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B Bold").font(.caption).foregroundStyle(.secondary) }
+            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
+            HStack { Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B Bold · ⌘. Larger · ⌘- Smaller · \(bodyFontSize) pt").font(.caption).foregroundStyle(.secondary) }
             HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (!stage.allowsIncompleteDetails && [chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)
         .onChange(of: [ritm, chg, title, bodyText, stage.rawValue, priority.rawValue]) { _, _ in onDirtyChange(true) }

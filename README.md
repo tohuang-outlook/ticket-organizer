@@ -5,7 +5,8 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 ## Daily use
 
 - Click once to select a ticket; double-click to open a movable, resizable editor.
-- The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 16 pt. Notes shows only the note title; the full body remains available in the editor and search.
+- The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt. Notes shows only the note title; the full body remains available in the editor and search.
+- Sidebar labels and workflow counts use 18 pt.
 - Organize notes into Draft, Working, Pending Approval, Approved, Examples, and Closed.
 - Drag a ticket onto a workflow in the sidebar to move it. The target highlights on hover; successful drops save immediately and open the destination list.
 - Type the Created date and time directly when adding a note (`yyyy-MM-dd HH:mm:ss`, local time), or click Now. Invalid dates cannot be saved.
@@ -14,7 +15,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - The app opens Draft by default. New notes default to Draft with Low priority.
 - Click the Created column heading to switch between newest-first and oldest-first order.
 - Search RITM, CHG, titles, or note text; filter by priority.
-- Select text and press Command-B to toggle bold. Body text defaults to 16 pt.
+- Select text and press Command-B to toggle bold. The body starts at 16 pt. Press Command-period to increase the whole note by 2 pt or Command-minus to decrease it; font size is saved with the note and ranges from 10 to 48 pt.
 - Press Command-S in the editor to save. Changes close the editor only after saving succeeds.
 - Quitting with unsaved ticket editors asks before discarding their changes.
 - Delete the selected ticket with Delete Selected Ticket or its context menu, then confirm.
@@ -69,7 +70,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.2.3 BUILD_NUMBER=25 ./scripts/build-app.sh
+MARKETING_VERSION=1.2.4 BUILD_NUMBER=26 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -116,12 +117,13 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.2.3)
+## Release acceptance gates (1.2.4)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 
 - Run all tests and build a universal archive; verify SHA256SUMS and the bundle signature.
 - On a disposable test account, verify selecting, double-click editing, bold/undo, manual Created input (including invalid dates), sorting, deletion confirmation, and moving between all six workflows. Confirm Working appears between Draft and Pending Approval. Reopen the app to check persistence.
+- Confirm list and sidebar text are 18 pt. In the body editor, verify Command-period/Command-minus adjust all text by 2 pt, preserve bold, remain within 10–48 pt, and persist after saving and reopening.
 - Verify unsaved edits trigger a warning on both editor close and Command-Q; Keep Editing must preserve the text.
 - Verify the packaged app on macOS 14 and on an Intel Mac; building both architectures is not the same as running on both.
 - Configure the real Apple Developer team, Production CloudKit schema, matching profile/certificate, and notarization credentials. Build with both REQUIRE_NOTARIZATION=1 and REQUIRE_ICLOUD=1. Require successful stapler validation and Gatekeeper assessment.

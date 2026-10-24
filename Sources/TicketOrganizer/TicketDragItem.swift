@@ -36,9 +36,9 @@ struct WorkflowDropRow: View {
         Button(action: onSelect) {
             HStack {
                 Image(systemName: icon).foregroundStyle(stage.color)
-                Text(stage.shortTitle).font(.system(size: 14))
+                Text(stage.shortTitle).font(.system(size: 18))
                 Spacer()
-                Text("\(store.notes.filter { $0.stage == stage }.count)").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("\(store.notes.filter { $0.stage == stage }.count)").font(.system(size: 18)).foregroundStyle(.secondary)
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 4)

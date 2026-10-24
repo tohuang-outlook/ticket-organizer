@@ -249,12 +249,14 @@ struct NewTicketView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Ticket Note").font(.title2.bold())
+            Text("Only RITM is required to save a draft. CHG, title, and notes can be added later.")
+                .font(.caption).foregroundStyle(.secondary)
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
             TextField("Note title", text: $title)
             DatePicker("Created", selection: $createdAt, displayedComponents: [.date, .hourAndMinute])
                 .datePickerStyle(.field)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
-            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled([ritm, chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }
+            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 580)
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
@@ -300,7 +302,7 @@ struct EditTicketView: View {
             TextField("Note title", text: $title)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack { Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B Bold").font(.caption).foregroundStyle(.secondary) }
-            HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled([ritm, chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }
+            HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (stage != .draft && [chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)
         .onChange(of: [ritm, chg, title, bodyText, stage.rawValue, priority.rawValue]) { _, _ in onDirtyChange(true) }
         .onChange(of: richBody) { _, _ in onDirtyChange(true) }

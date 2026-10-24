@@ -3,6 +3,29 @@ import XCTest
 
 final class TicketStoreTests: XCTestCase {
     @MainActor
+    func testRITMOnlyDraftCanBeSavedReopenedAndCompleted() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        let draft = TicketNote(ritm: "RITM123456", chg: "", title: "", body: "", stage: .draft, priority: .medium, owner: "")
+        try store.add(draft)
+        let reopened = TicketStore(url: url)
+        var saved = try XCTUnwrap(reopened.notes.first)
+        XCTAssertEqual(saved.ritm, draft.ritm)
+        XCTAssertTrue(saved.chg.isEmpty)
+        XCTAssertTrue(saved.title.isEmpty)
+        XCTAssertTrue(saved.body.isEmpty)
+        saved.body = "Continue drafting"
+        try reopened.update(saved)
+        XCTAssertEqual(TicketStore(url: url).notes.first?.body, saved.body)
+        saved.chg = "CHG123"
+        saved.title = "Completed note"
+        try reopened.update(saved)
+        XCTAssertEqual(TicketStore(url: url).notes.first?.chg, saved.chg)
+    }
+
+    @MainActor
     func testWorkflowDropsPersistWithoutChangingNoteOrCreationTime() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }

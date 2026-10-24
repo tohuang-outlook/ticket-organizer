@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3
+
+- Save new drafts with only RITM populated; CHG, title, and body are optional.
+- Continue editing and saving incomplete drafts without requiring CHG or a title.
+
 ## 1.1.2
 
 - Drag tickets onto Draft, Pending Approval, Approved, or Examples in the sidebar to move them.

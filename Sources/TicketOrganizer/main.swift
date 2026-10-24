@@ -1,0 +1,124 @@
+import SwiftUI
+import Foundation
+
+@main
+struct TicketOrganizerApp: App {
+    var body: some Scene {
+        WindowGroup("Ticket Organizer") { ContentView() }
+            .windowStyle(.titleBar)
+            .defaultSize(width: 1180, height: 760)
+            .commands { CommandGroup(after: .newItem) { Button("新建工单笔记") { NotificationCenter.default.post(name: .newTicket, object: nil) }.keyboardShortcut("n") } }
+    }
+}
+
+extension Notification.Name { static let newTicket = Notification.Name("newTicket") }
+
+enum TicketStage: String, Codable, CaseIterable, Identifiable {
+    case draft, approval, example
+    var id: String { rawValue }
+    var title: String { switch self { case .draft: "草稿"; case .approval: "UCSF ticket send for approve"; case .example: "UCSF ticket example" } }
+    var shortTitle: String { switch self { case .draft: "草稿"; case .approval: "待审批"; case .example: "示例" } }
+    var color: Color { switch self { case .draft: .secondary; case .approval: .orange; case .example: .purple } }
+}
+
+enum Priority: String, Codable, CaseIterable, Identifiable {
+    case high, medium, low
+    var id: String { rawValue }
+    var title: String { switch self { case .high: "高"; case .medium: "中"; case .low: "低" } }
+    var color: Color { switch self { case .high: .red; case .medium: .orange; case .low: .green } }
+}
+
+struct TicketNote: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var ritm: String
+    var chg: String
+    var title: String
+    var body: String
+    var stage: TicketStage
+    var priority: Priority
+    var owner: String
+    var updatedAt = Date()
+}
+
+@MainActor
+final class TicketStore: ObservableObject {
+    @Published var notes: [TicketNote] = []
+    private let url: URL
+    init() {
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("TicketOrganizer", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        url = folder.appendingPathComponent("tickets.json")
+        load()
+    }
+    func load() {
+        if let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode([TicketNote].self, from: data) { notes = saved; return }
+        notes = [
+            TicketNote(ritm: "RITM0767540", chg: "CHG0197325", title: "Panorama 添加共享地址对象和安全规则", body: "On Panorama, Device Group: ECDC_UCSF\nOn Panorama, Device Group: QUINCY_UCSF\n\n1. OBJECTS > Addresses，新增 shared address object\n2. POLICIES > Security > Pre Rules，新增规则\n3. Commit and push 到 QUINCY_UCSF device group", stage: .approval, priority: .high, owner: "Huang Chen"),
+            TicketNote(ritm: "RITM0767221", chg: "CHG0197291", title: "更新 QUINCY_UCSF 设备组策略", body: "补充 source zone、source address、destination zone、service 和 action 字段。", stage: .draft, priority: .medium, owner: "Huang Chen"),
+            TicketNote(ritm: "RITM0767014", chg: "CHG0197269", title: "共享地址对象配置示例", body: "已验证命名规则和设备组配置，可作为后续类似变更的参考。", stage: .example, priority: .low, owner: "Jia Li"),
+            TicketNote(ritm: "RITM0766903", chg: "CHG0197272", title: "Pre Rules 规则变更记录", body: "完成规则创建、检查和提交，等待最终审批反馈。", stage: .approval, priority: .medium, owner: "Huang Chen")
+        ]
+    }
+    func save() { if let data = try? JSONEncoder().encode(notes) { try? data.write(to: url, options: .atomic) } }
+    func add(_ note: TicketNote) { notes.insert(note, at: 0); save() }
+    func move(_ note: TicketNote, to stage: TicketStage) { guard let i = notes.firstIndex(of: note) else { return }; notes[i].stage = stage; notes[i].updatedAt = Date(); save() }
+}
+
+struct ContentView: View {
+    @StateObject private var store = TicketStore()
+    @State private var selection: TicketStage? = nil
+    @State private var selectedNote: TicketNote?
+    @State private var query = ""
+    @State private var showNew = false
+    @State private var priority: Priority? = nil
+    private var filtered: [TicketNote] { store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) } }
+    var body: some View {
+        NavigationSplitView {
+            Sidebar(store: store, selection: $selection, showNew: $showNew)
+        } detail: {
+            VStack(spacing: 0) {
+                HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "全部工单笔记").font(.largeTitle.bold()); Text("记录 RITM、CHG 与实施步骤，完成后移动到审批队列。").foregroundStyle(.secondary).font(.subheadline) }; Spacer(); Button { showNew = true } label: { Label("新建笔记", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
+                Divider()
+                HStack { TextField("搜索 RITM、CHG 或笔记内容", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("优先级", selection: $priority) { Text("全部优先级").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) 条记录").foregroundStyle(.secondary).font(.caption) }.padding(.horizontal, 28).padding(.vertical, 14)
+                List(selection: $selectedNote) { Section { ForEach(filtered) { note in NoteRow(note: note).tag(Optional(note)) } } header: { TableHeader() } }.listStyle(.inset)
+            }.sheet(isPresented: $showNew) { NewTicketView { store.add($0); selectedNote = $0 } }
+        }.inspector(isPresented: Binding(get: { selectedNote != nil }, set: { if !$0 { selectedNote = nil } })) { if let note = selectedNote { DetailView(note: note, store: store) } }
+        .onReceive(NotificationCenter.default.publisher(for: .newTicket)) { _ in showNew = true }
+    }
+}
+
+struct Sidebar: View {
+    @ObservedObject var store: TicketStore; @Binding var selection: TicketStage?; @Binding var showNew: Bool
+    var body: some View { List { Section { Button { selection = nil } label: { Label("全部笔记", systemImage: "tray.full") }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("工单笔记") }; Section("流程") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.caption) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("新建工单笔记", systemImage: "plus.circle") }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
+}
+
+struct TableHeader: View { var body: some View { HStack { Text("工单编号").frame(width: 180, alignment: .leading); Text("流程状态").frame(width: 135, alignment: .leading); Text("优先级").frame(width: 75, alignment: .leading); Text("笔记内容").frame(maxWidth: .infinity, alignment: .leading); Text("负责人").frame(width: 110, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }
+struct NoteRow: View {
+    let note: TicketNote
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) { Text(note.ritm).font(.system(.caption, design: .monospaced)).bold(); Text(note.chg).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary) }.frame(width: 180, alignment: .leading)
+            Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
+            Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)
+            VStack(alignment: .leading, spacing: 3) { Text(note.title).fontWeight(.semibold); Text(note.body.replacingOccurrences(of: "\n", with: " · ")).lineLimit(1).font(.caption).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading)
+            Text(note.owner).font(.caption).frame(width: 110, alignment: .leading)
+        }.padding(.vertical, 6)
+    }
+}
+
+struct DetailView: View { let note: TicketNote; @ObservedObject var store: TicketStore; var body: some View { VStack(alignment: .leading, spacing: 18) { Text("工单详情").font(.headline); Text("\(note.ritm), \(note.chg)").font(.system(.title3, design: .monospaced)).bold(); Divider(); Text(note.title).font(.title2.bold()); Text(note.body).textSelection(.enabled); Spacer(); HStack { Button("移回草稿") { store.move(note, to: .draft) }.disabled(note.stage == .draft); Button("送审批") { store.move(note, to: .approval) }.disabled(note.stage == .approval); Button("设为示例") { store.move(note, to: .example) }.disabled(note.stage == .example) }.buttonStyle(.borderedProminent) }.padding(24).frame(minWidth: 320, alignment: .leading) } }
+
+struct NewTicketView: View {
+    @Environment(\.dismiss) private var dismiss
+    var onSave: (TicketNote) -> Void
+    @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .medium; @State private var owner = "Huang Chen"
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("新建工单笔记").font(.title2.bold())
+            HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
+            TextField("笔记标题", text: $title)
+            TextEditor(text: $bodyText).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
+            HStack { Picker("优先级", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Picker("负责人", selection: $owner) { Text("Huang Chen").tag("Huang Chen"); Text("Jia Li").tag("Jia Li") }; Spacer(); Button("取消") { dismiss() }; Button("保存为草稿") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: owner)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+        }.padding(24).frame(width: 580)
+    }
+}

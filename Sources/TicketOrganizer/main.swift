@@ -4,8 +4,9 @@ import AppKit
 
 @main
 struct TicketOrganizerApp: App {
+    @StateObject private var store = TicketStore()
     var body: some Scene {
-        WindowGroup("Ticket Organizer") { ContentView().environment(\.locale, Locale(identifier: "en")) }
+        WindowGroup("Ticket Organizer") { ContentView(store: store).environment(\.locale, Locale(identifier: "en")) }
             .windowStyle(.titleBar)
             .defaultSize(width: 1180, height: 760)
             .commands { CommandGroup(after: .newItem) { Button("New Ticket Note") { NotificationCenter.default.post(name: .newTicket, object: nil) }.keyboardShortcut("n") } }
@@ -44,6 +45,13 @@ struct TicketNote: Identifiable, Codable, Hashable {
 }
 
 extension TicketNote {
+    static func sortedByCreation(_ notes: [TicketNote], newestFirst: Bool) -> [TicketNote] {
+        notes.sorted {
+            if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
+            return newestFirst ? $0.createdAt > $1.createdAt : $0.createdAt < $1.createdAt
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, ritm, chg, title, body, stage, priority, owner, updatedAt, richBody, createdAt
     }
@@ -72,34 +80,8 @@ private let createdDateFormatter: DateFormatter = {
     return formatter
 }()
 
-@MainActor
-final class TicketStore: ObservableObject {
-    @Published var notes: [TicketNote] = []
-    private let url: URL
-    init() {
-        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("TicketOrganizer", isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        url = folder.appendingPathComponent("tickets.json")
-        load()
-    }
-    func load() {
-        if let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode([TicketNote].self, from: data) { notes = saved; return }
-        notes = [
-            TicketNote(ritm: "RITM0767540", chg: "CHG0197325", title: "Panorama: Add shared address objects and security rules", body: "On Panorama, Device Group: ECDC_UCSF\nOn Panorama, Device Group: QUINCY_UCSF\n\n1. OBJECTS > Addresses: Add a shared address object\n2. POLICIES > Security > Pre Rules: Add a new rule\n3. Commit and push to the QUINCY_UCSF device group", stage: .approval, priority: .high, owner: "Huang Chen"),
-            TicketNote(ritm: "RITM0767221", chg: "CHG0197291", title: "Update QUINCY_UCSF device group policy", body: "Fill in source zone, source address, destination zone, service, and action.", stage: .draft, priority: .medium, owner: "Huang Chen"),
-            TicketNote(ritm: "RITM0767014", chg: "CHG0197269", title: "Shared address object configuration example", body: "Validated naming conventions and device group configuration. Use as a reference for similar changes.", stage: .example, priority: .low, owner: "Jia Li"),
-            TicketNote(ritm: "RITM0766903", chg: "CHG0197272", title: "Pre Rules change notes", body: "Rule creation, review, and commit are complete. Awaiting final approval.", stage: .approval, priority: .medium, owner: "Huang Chen")
-        ]
-    }
-    func save() { if let data = try? JSONEncoder().encode(notes) { try? data.write(to: url, options: .atomic) } }
-    func add(_ note: TicketNote) { notes.insert(note, at: 0); save() }
-    func delete(_ note: TicketNote) { notes.removeAll { $0.id == note.id }; save() }
-    func update(_ note: TicketNote) { guard let i = notes.firstIndex(where: { $0.id == note.id }) else { return }; notes[i] = note; notes[i].updatedAt = Date(); save() }
-    func move(_ note: TicketNote, to stage: TicketStage) { guard let i = notes.firstIndex(of: note) else { return }; notes[i].stage = stage; notes[i].updatedAt = Date(); save() }
-}
-
 struct ContentView: View {
-    @StateObject private var store = TicketStore()
+    @ObservedObject var store: TicketStore
     @State private var selection: TicketStage? = nil
     @State private var selectedID: UUID?
     @State private var ticketToDelete: TicketNote?
@@ -109,11 +91,7 @@ struct ContentView: View {
     @State private var priority: Priority? = nil
     @State private var newestFirst = true
     private var filtered: [TicketNote] {
-        store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) }
-            .sorted {
-                if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
-                return newestFirst ? $0.createdAt > $1.createdAt : $0.createdAt < $1.createdAt
-            }
+        TicketNote.sortedByCreation(store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) }, newestFirst: newestFirst)
     }
     private var selectedTicket: TicketNote? { filtered.first { $0.id == selectedID } }
 
@@ -121,7 +99,7 @@ struct ContentView: View {
         guard let note = store.notes.first(where: { $0.id == id }) else { return }
         selectedID = id
         TicketEditorWindows.shared.open(note: note) { updated in
-            store.update(updated)
+            try store.update(updated)
         }
     }
 
@@ -159,14 +137,16 @@ struct ContentView: View {
                 } primaryAction: { ids in
                     if let id = ids.first { openTicket(id) }
                 }
-            }.sheet(isPresented: $showNew) { NewTicketView { store.add($0); selectedID = $0.id } }
+            }.sheet(isPresented: $showNew) { NewTicketView { try store.add($0); selectedID = $0.id } }
         }
         .alert("Delete this ticket?", isPresented: $showDeleteConfirmation, presenting: ticketToDelete) { note in
             Button("Cancel", role: .cancel) { ticketToDelete = nil }
             Button("Delete", role: .destructive) {
-                TicketEditorWindows.shared.close(note.id)
-                store.delete(note)
-                selectedID = nil
+                do {
+                    try store.delete(note)
+                    TicketEditorWindows.shared.close(note.id)
+                    selectedID = nil
+                } catch { store.errorMessage = error.localizedDescription }
                 ticketToDelete = nil
             }
         } message: { note in
@@ -176,6 +156,9 @@ struct ContentView: View {
             if let id = selectedID, !ids.contains(id) { selectedID = nil }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTicket)) { _ in showNew = true }
+        .alert("Unable to Access Notes", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
+            Button("OK") { store.errorMessage = nil }
+        } message: { Text(store.errorMessage ?? "") }
     }
 }
 
@@ -216,14 +199,21 @@ struct NoteRow: View {
     }
 }
 
-struct DetailView: View { let note: TicketNote; @ObservedObject var store: TicketStore; var onDelete: () -> Void; @State private var confirmDelete = false; var body: some View { VStack(alignment: .leading, spacing: 18) { Text("Ticket Details").font(.headline); Text("\(note.ritm), \(note.chg)").font(.system(.title3, design: .monospaced)).bold(); Divider(); Text(note.title).font(.title2.bold()); Text(note.body).textSelection(.enabled); Spacer(); HStack { Button("Move to Draft") { store.move(note, to: .draft) }.disabled(note.stage == .draft); Button("Send for Approval") { store.move(note, to: .approval) }.disabled(note.stage == .approval); Button("Save as Example") { store.move(note, to: .example) }.disabled(note.stage == .example); Spacer(); Button("Delete Ticket", role: .destructive) { confirmDelete = true } }.buttonStyle(.borderedProminent) }.padding(24).frame(minWidth: 320, alignment: .leading).alert("Delete this ticket?", isPresented: $confirmDelete) { Button("Cancel", role: .cancel) {}; Button("Delete", role: .destructive) { onDelete() } } message: { Text("This will permanently remove the ticket from your list and local storage. This action cannot be undone.") } } }
 
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
-    var onSave: (TicketNote) -> Void
+    var onSave: (TicketNote) throws -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .medium
     @State private var richBody: Data?
     @State private var createdAt = Date()
+    @State private var saveError: String?
+
+    private func saveNote() {
+        do {
+            try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt))
+            dismiss()
+        } catch { saveError = error.localizedDescription }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Ticket Note").font(.title2.bold())
@@ -232,15 +222,17 @@ struct NewTicketView: View {
             DatePicker("Created", selection: $createdAt, displayedComponents: [.date, .hourAndMinute])
                 .datePickerStyle(.field)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
-            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled([ritm, chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }
         }.padding(24).frame(width: 580)
+        .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
 }
 
 struct EditTicketView: View {
     var onClose: () -> Void
+    var onDirtyChange: (Bool) -> Void
     let original: TicketNote
-    var onSave: (TicketNote) -> Void
+    var onSave: (TicketNote) throws -> Void
     @State private var ritm: String
     @State private var chg: String
     @State private var title: String
@@ -248,11 +240,25 @@ struct EditTicketView: View {
     @State private var stage: TicketStage
     @State private var priority: Priority
     @State private var richBody: Data?
+    @State private var saveError: String?
 
-    init(note: TicketNote, onClose: @escaping () -> Void, onSave: @escaping (TicketNote) -> Void) {
-        original = note; self.onClose = onClose; self.onSave = onSave
+    init(note: TicketNote, onClose: @escaping () -> Void, onDirtyChange: @escaping (Bool) -> Void, onSave: @escaping (TicketNote) throws -> Void) {
+        original = note; self.onClose = onClose; self.onDirtyChange = onDirtyChange; self.onSave = onSave
         _ritm = State(initialValue: note.ritm); _chg = State(initialValue: note.chg); _title = State(initialValue: note.title)
         _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
+    }
+
+    private func saveNote() {
+        var updated = original
+        updated.ritm = ritm.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.chg = chg.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.body = bodyText
+        updated.stage = stage
+        updated.priority = priority
+        updated.richBody = richBody
+        do { try onSave(updated); onClose() }
+        catch { saveError = error.localizedDescription }
     }
 
     var body: some View {
@@ -262,8 +268,11 @@ struct EditTicketView: View {
             TextField("Note title", text: $title)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack { Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B Bold").font(.caption).foregroundStyle(.secondary) }
-            HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes") { var updated = original; updated.ritm = ritm; updated.chg = chg; updated.title = title; updated.body = bodyText; updated.stage = stage; updated.priority = priority; updated.richBody = richBody; onSave(updated); onClose() }.buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+            HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled([ritm, chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)
+        .onChange(of: [ritm, chg, title, bodyText, stage.rawValue, priority.rawValue]) { _, _ in onDirtyChange(true) }
+        .onChange(of: richBody) { _, _ in onDirtyChange(true) }
+        .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
 }
 
@@ -276,7 +285,7 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
         windows[id]?.close()
     }
 
-    func open(note: TicketNote, onSave: @escaping (TicketNote) -> Void) {
+    func open(note: TicketNote, onSave: @escaping (TicketNote) throws -> Void) {
         if let existing = windows[note.id] {
             existing.makeKeyAndOrderFront(nil)
             return
@@ -285,7 +294,10 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
         window.title = "\(note.ritm) · \(note.chg) — Edit Note"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentView = NSHostingView(rootView: EditTicketView(note: note, onClose: { [weak window] in window?.close() }, onSave: onSave).environment(\.locale, Locale(identifier: "en")))
+        window.contentView = NSHostingView(rootView: EditTicketView(note: note, onClose: { [weak window] in window?.performClose(nil) }, onDirtyChange: { [weak window] dirty in window?.isDocumentEdited = dirty }, onSave: { [weak window] updated in
+            try onSave(updated)
+            window?.isDocumentEdited = false
+        }).environment(\.locale, Locale(identifier: "en")))
         window.contentMinSize = NSSize(width: 720, height: 480)
         windows[note.id] = window
         window.center()
@@ -296,5 +308,15 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
         guard let window = notification.object as? NSWindow,
               let id = windows.first(where: { $0.value === window })?.key else { return }
         windows.removeValue(forKey: id)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender.isDocumentEdited else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Discard unsaved changes?"
+        alert.informativeText = "Your changes have not been saved. Keep editing to save them, or discard them to close this window."
+        alert.addButton(withTitle: "Keep Editing")
+        alert.addButton(withTitle: "Discard Changes")
+        return alert.runModal() == .alertSecondButtonReturn
     }
 }

@@ -2,6 +2,17 @@ import XCTest
 @testable import TicketOrganizer
 
 final class CreationDateTests: XCTestCase {
+    func testSortingUsesCreationTimeInsteadOfLastEditTime() {
+        var older = note()
+        var newer = note()
+        older.createdAt = Date(timeIntervalSince1970: 100)
+        older.updatedAt = Date(timeIntervalSince1970: 900)
+        newer.createdAt = Date(timeIntervalSince1970: 200)
+        newer.updatedAt = Date(timeIntervalSince1970: 300)
+        XCTAssertEqual(TicketNote.sortedByCreation([older, newer], newestFirst: true).map(\.id), [newer.id, older.id])
+        XCTAssertEqual(TicketNote.sortedByCreation([newer, older], newestFirst: false).map(\.id), [older.id, newer.id])
+    }
+
     private func note() -> TicketNote {
         TicketNote(ritm: "RITM001", chg: "CHG001", title: "Test", body: "Original text", stage: .draft, priority: .medium, owner: "", updatedAt: Date(timeIntervalSince1970: 1700000000), richBody: Data([1, 2, 3]), createdAt: Date(timeIntervalSince1970: 1600000000))
     }

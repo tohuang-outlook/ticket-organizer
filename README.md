@@ -1,47 +1,83 @@
 # Ticket Organizer
 
-原生 macOS SwiftUI 工单笔记应用，用来替代目前在 Notes 里维护 RITM / CHG 工单的流程。
+A native, offline macOS app for organizing RITM and CHG ticket notes. Requires macOS 14 or later. Universal builds support Apple Silicon and Intel Macs.
 
-## 功能
+## Daily use
 
-- 保存 RITM、CHG、笔记标题、操作步骤、优先级和负责人
-- 三个流程区：草稿、UCSF ticket send for approve、UCSF ticket example
-- 在详情面板中一键移动工单状态
-- 搜索 RITM、CHG 和笔记内容
-- 数据自动保存到 macOS Application Support
-- 示例数据已按当前 UCSF / Panorama 工作流程预置
-- 支持 Git tag 触发 GitHub Actions，自动生成 macOS 发布包
-- 使用 UCSF 工单流程专属 App 图标
+- Click once to select a ticket; double-click to open a movable, resizable editor.
+- Organize notes into Draft, Pending Approval, Approved, and Examples.
+- Choose a creation date and time when adding a note.
+- Click the Created column heading to switch between newest-first and oldest-first order.
+- Search RITM, CHG, titles, or note text; filter by priority.
+- Select text and press Command-B to toggle bold. Body text defaults to 16 pt.
+- Press Command-S in the editor to save. Changes close the editor only after saving succeeds.
+- Delete the selected ticket with Delete Selected Ticket or its context menu, then confirm.
 
-## 运行
+New installations start with an empty list. Existing notes are preserved. There is no account, web service, or telemetry.
 
-需要 macOS 14+ 和 Xcode 15+：
+## Install
+
+Download and unzip the release archive, then move Ticket Organizer.app to Applications. Quit the old version before replacing it. App updates do not delete saved notes.
+
+Current locally generated archives are ad-hoc signed for testing, not Apple Developer ID signed or notarized. macOS may require approval in System Settings > Privacy & Security. Do not disable Gatekeeper globally.
+
+## Data and backups
+
+Notes are stored only on this Mac:
+
+```text
+~/Library/Application Support/TicketOrganizer/tickets.json
+~/Library/Application Support/TicketOrganizer/tickets.json.backup
+```
+
+The backup contains the previous successful save; it is replaced on the next successful change. Include this folder in your normal Mac backups. For a manual backup, quit the app and copy the folder to another location.
+
+To recover, quit the app, make a copy of both files, inspect the backup, and restore the desired copy as tickets.json. If the current file cannot be read, the app reports an error and blocks writes rather than replacing it. Save errors leave edited text open for retrying.
+
+Older versions did not record creation time. Their last-modified timestamp is used as the initial creation time and preserved on subsequent edits. The original creation time cannot be reconstructed.
+
+## Develop and test
+
+Use Xcode 15 or later, or its command-line tools:
 
 ```bash
 swift run
+swift test
 ```
 
-生成可双击打开的 macOS App：
+Open Package.swift in Xcode to build and debug. Tests cover legacy date migration, persistence, deletion, backup behavior, write failures, damaged files, and selected-text bold formatting.
+
+## Package
 
 ```bash
-chmod +x scripts/build-app.sh
 ./scripts/build-app.sh
 open "dist/Ticket Organizer.app"
 ```
 
-默认版本为 `1.0.0`。可以通过环境变量设置版本和构建号：
+VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.0.0 BUILD_NUMBER=1 ./scripts/build-app.sh
+MARKETING_VERSION=1.1.0 BUILD_NUMBER=14 ./scripts/build-app.sh
+(cd dist && shasum -c SHA256SUMS)
 ```
 
-产物会生成在 `dist/`：App、ZIP 压缩包和 `SHA256SUMS` 校验文件。发布新版本时创建 tag：
+The script builds both CPU architectures, validates the bundle and signature, verifies the ZIP, and generates relative SHA256 checksums. Artifacts are written to dist/ and are not committed to Git.
+
+## Developer ID distribution
+
+Install your Apple Developer ID Application certificate and store notarization credentials in a local notarytool keychain profile. These credentials are not part of this repository.
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \\
+NOTARY_PROFILE="ticket-organizer-notary" \\
+REQUIRE_NOTARIZATION=1 \\
+./scripts/build-app.sh
 ```
 
-GitHub Actions 会自动构建并创建 Release。若要签名，设置 `SIGNING_IDENTITY` 后运行打包脚本；正式分发还需要配置 Apple Developer 证书和 notarization 流程。
+This signs with the hardened runtime, submits to Apple, staples the accepted ticket, and checks Gatekeeper assessment. REQUIRE_NOTARIZATION=1 rejects builds without the signing identity and notarization profile.
 
-也可以用 Xcode 打开 `Package.swift` 后运行。
+## GitHub builds
+
+Pushes to main, pull requests, and manual runs execute tests and package the app. A vX.Y.Z tag must match VERSION and creates a **draft** GitHub Release with the ZIP and checksums. The CI build is ad-hoc signed; use the Developer ID process above and replace the draft assets before publishing for general distribution.
+
+For the next release, update VERSION, commit, and push the matching tag. Existing published tags must not be moved.

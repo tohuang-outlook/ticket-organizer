@@ -82,7 +82,7 @@ private let createdDateFormatter: DateFormatter = {
 
 struct ContentView: View {
     @ObservedObject var store: TicketStore
-    @State private var selection: TicketStage? = nil
+    @State private var selection: TicketStage? = .draft
     @State private var selectedID: UUID?
     @State private var ticketToDelete: TicketNote?
     @State private var showDeleteConfirmation = false
@@ -142,7 +142,7 @@ struct ContentView: View {
                 } primaryAction: { ids in
                     if let id = ids.first { openTicket(id) }
                 }
-            }.sheet(isPresented: $showNew) { NewTicketView { try store.add($0); selectedID = $0.id } }
+            }.sheet(isPresented: $showNew) { NewTicketView { try store.add($0); selection = .draft; selectedID = $0.id } }
         }
         .alert("Delete this ticket?", isPresented: $showDeleteConfirmation, presenting: ticketToDelete) { note in
             Button("Cancel", role: .cancel) { ticketToDelete = nil }
@@ -235,7 +235,7 @@ struct NoteRow: View {
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
     var onSave: (TicketNote) throws -> Void
-    @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .medium
+    @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
     @State private var createdAt = Date()
     @State private var saveError: String?

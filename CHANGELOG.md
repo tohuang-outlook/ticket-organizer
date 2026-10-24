@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.4
+
+- Open the Draft workflow by default.
+- New notes default to Draft and Low priority; saving a new note displays the Draft list.
+
 ## 1.1.3
 
 - Save new drafts with only RITM populated; CHG, title, and body are optional.

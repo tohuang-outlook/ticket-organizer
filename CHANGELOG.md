@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.0
+
+- Add opt-in iCloud sync settings, status, automatic sync while running, and Sync Now.
+- Use a private CloudKit database with one asset-backed record per ticket.
+- Persist offline changes, upload acknowledgments, and deletion tombstones across restarts.
+- Merge concurrent edits deterministically and keep losing versions recoverable as new drafts.
+- Pause sync when a different iCloud account is detected.
+- Preserve legacy notes and creation times; keep a pre-migration backup on the first save.
+- Block stale open editors from overwriting newly synchronized content.
+- Add provisioning-profile validation and iCloud entitlements to the signed build workflow.
+
+CloudKit requires an Apple provisioning profile and a registered container. Default ad-hoc builds keep sync disabled and continue local saving. Live two-Mac sync has not been validated without those credentials.
+
 ## 1.1.4
 
 - Open the Draft workflow by default.

@@ -19,6 +19,7 @@ final class TicketStoreTests: XCTestCase {
         saved.body = "Continue drafting"
         try reopened.update(saved)
         XCTAssertEqual(TicketStore(url: url).notes.first?.body, saved.body)
+        saved = try XCTUnwrap(TicketStore(url: url).notes.first)
         saved.chg = "CHG123"
         saved.title = "Completed note"
         try reopened.update(saved)
@@ -59,6 +60,7 @@ final class TicketStoreTests: XCTestCase {
         try store.update(editor, originalStage: original.stage)
         XCTAssertEqual(store.notes.first?.stage, .approved)
         XCTAssertEqual(store.notes.first?.body, editor.body)
+        editor = try XCTUnwrap(store.notes.first)
         editor.stage = .example
         try store.update(editor, originalStage: original.stage)
         XCTAssertEqual(store.notes.first?.stage, .example)
@@ -131,7 +133,7 @@ final class TicketStoreTests: XCTestCase {
         var updated = original
         updated.title = "Changed title"
         try store.update(updated)
-        let backup = try JSONDecoder().decode([TicketNote].self, from: Data(contentsOf: url.appendingPathExtension("backup")))
+        let backup = try TicketArchive.decode(Data(contentsOf: url.appendingPathExtension("backup"))).notes
         XCTAssertEqual(backup.first?.title, original.title)
         XCTAssertEqual(TicketStore(url: url).notes.first?.title, updated.title)
     }

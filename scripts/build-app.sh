@@ -6,6 +6,11 @@ cd "$ROOT"
 VERSION="${MARKETING_VERSION:-$(< VERSION)}"
 VERSION="${VERSION#v}"
 BUILD="${BUILD_NUMBER:-1}"
+ICLOUD_PROFILE="${ICLOUD_PROVISIONING_PROFILE:-}"
+if [[ -n "$ICLOUD_PROFILE" && ( ! -f "$ICLOUD_PROFILE" || -z "${SIGNING_IDENTITY:-}" ) ]]; then
+  echo "iCloud requires a valid provisioning profile and Apple signing identity." >&2
+  exit 1
+fi
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! "$BUILD" =~ ^[0-9]+$ ]]; then
   echo "Version must be X.Y.Z and build number must be numeric." >&2
   exit 1
@@ -43,8 +48,16 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
+ENTITLEMENT_ARGS=()
+if [[ -n "$ICLOUD_PROFILE" ]]; then
+  security cms -D -i "$ICLOUD_PROFILE" -o "$STAGING/profile.plist"
+  swift "$ROOT/scripts/prepare-icloud-signing.swift" "$STAGING/profile.plist" "$STAGING/iCloud.entitlements" \
+    "iCloud.com.tohuang.ticket-organizer" "${ICLOUD_ENVIRONMENT:-Production}"
+  cp "$ICLOUD_PROFILE" "$APP/Contents/embedded.provisionprofile"
+  ENTITLEMENT_ARGS=(--entitlements "$STAGING/iCloud.entitlements")
+fi
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
-  codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"
+  codesign --force --options runtime --timestamp "${ENTITLEMENT_ARGS[@]}" --sign "$SIGNING_IDENTITY" "$APP"
 else
   codesign --force --sign - "$APP"
 fi

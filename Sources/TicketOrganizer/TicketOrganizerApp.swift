@@ -10,6 +10,9 @@ struct TicketOrganizerApp: App {
             .windowStyle(.titleBar)
             .defaultSize(width: 1180, height: 760)
             .commands { CommandGroup(after: .newItem) { Button("New Ticket Note") { NotificationCenter.default.post(name: .newTicket, object: nil) }.keyboardShortcut("n") } }
+        Settings {
+            CloudSyncSettingsView(store: store, sync: store.cloudSync).environment(\.locale, Locale(identifier: "en"))
+        }
     }
 }
 
@@ -113,6 +116,7 @@ struct ContentView: View {
             Sidebar(store: store, selection: $selection, showNew: $showNew, onMoved: { selectedID = $0 })
         } detail: {
             VStack(spacing: 0) {
+                HStack { Spacer(); CloudSyncStatusView(sync: store.cloudSync) }.padding(.horizontal, 28).padding(.top, 12)
                 HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "All Ticket Notes").font(.system(size: 48, weight: .bold)); Text("Keep RITM, CHG, and implementation notes together. Send them for approval when ready.").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("New Note", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
                 Divider()
                 HStack { TextField("Search RITM, CHG, or notes", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("Priority", selection: $priority) { Text("All Priorities").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) notes").foregroundStyle(.secondary).font(.caption)
@@ -161,6 +165,10 @@ struct ContentView: View {
             if let id = selectedID, !ids.contains(id) { selectedID = nil }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTicket)) { _ in showNew = true }
+        .task { store.cloudSync.start() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await store.cloudSync.syncNow() }
+        }
         .alert("Unable to Access Notes", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }

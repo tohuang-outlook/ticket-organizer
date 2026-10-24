@@ -17,7 +17,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Test data persistence, migration, and text formatting
+      - name: Test persistence, formatting, migration, and simulated iCloud sync
         run: swift test
       - name: Resolve release version
         shell: bash
@@ -49,6 +49,7 @@ jobs:
           body: |
             Universal macOS 14+ build for Apple Silicon and Intel.
             This build is ad-hoc signed, not Apple Developer ID signed or notarized.
+            iCloud is unavailable in this build until a matching Apple iCloud provisioning profile and signing identity are used.
             Complete Developer ID signing and notarization before public distribution.
           files: |
             dist/Ticket-Organizer-*.zip

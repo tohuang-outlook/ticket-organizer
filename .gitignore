@@ -2,3 +2,8 @@
 DerivedData/
 dist/
 .DS_Store
+*.provisionprofile
+*.mobileprovision
+*.p12
+*.pfx
+*.key

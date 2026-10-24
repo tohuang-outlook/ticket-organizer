@@ -3,11 +3,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+VERSION="${MARKETING_VERSION:-1.0.0}"
+BUILD="${BUILD_NUMBER:-1}"
+ARCH="$(uname -m)"
 swift build -c release
+PRODUCT="$ROOT/.build/${ARCH}-apple-macosx/release/TicketOrganizer"
+if [ ! -f "$PRODUCT" ]; then PRODUCT="$ROOT/.build/arm64-apple-macosx/release/TicketOrganizer"; fi
+if [ ! -f "$PRODUCT" ]; then PRODUCT="$ROOT/.build/out/Products/Release/TicketOrganizer"; fi
 APP="$ROOT/dist/Ticket Organizer.app"
-rm -rf "$APP"
+rm -rf "$ROOT/dist"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$ROOT/.build/arm64-apple-macosx/release/TicketOrganizer" "$APP/Contents/MacOS/TicketOrganizer"
+cp "$PRODUCT" "$APP/Contents/MacOS/TicketOrganizer"
+chmod +x "$APP/Contents/MacOS/TicketOrganizer"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -17,7 +24,16 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.tohuang.ticket-organizer</string>
 <key>CFBundleName</key><string>Ticket Organizer</string>
 <key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>__VERSION__</string>
+<key>CFBundleVersion</key><string>__BUILD__</string>
+<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>NSHumanReadableCopyright</key><string>Copyright © 2026 Huang Chen</string>
 </dict></plist>
 PLIST
+sed -i '' "s/__VERSION__/$VERSION/g; s/__BUILD__/$BUILD/g" "$APP/Contents/Info.plist"
+if [ -n "${SIGNING_IDENTITY:-}" ]; then codesign --force --deep --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"; fi
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$ROOT/dist/Ticket-Organizer-$VERSION.zip"
+shasum -a 256 "$ROOT/dist/Ticket-Organizer-$VERSION.zip" > "$ROOT/dist/SHA256SUMS"
 echo "Built: $APP"
+echo "Archive: $ROOT/dist/Ticket-Organizer-$VERSION.zip"

@@ -1,0 +1,33 @@
+name: Build macOS app
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and package
+        env:
+          MARKETING_VERSION: ${{ github.ref_name != 'master' && github.ref_name || '1.0.0' }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/build-app.sh
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ticket-organizer-macos
+          path: dist/*
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/Ticket-Organizer-*.zip
+            dist/SHA256SUMS

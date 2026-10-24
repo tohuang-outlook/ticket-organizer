@@ -5,10 +5,11 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 ## Daily use
 
 - Click once to select a ticket; double-click to open a movable, resizable editor.
-- Organize notes into Draft, Pending Approval, Approved, Examples, and Closed.
+- Organize notes into Draft, Working, Pending Approval, Approved, Examples, and Closed.
 - Drag a ticket onto a workflow in the sidebar to move it. The target highlights on hover; successful drops save immediately and open the destination list.
 - Type the Created date and time directly when adding a note (`yyyy-MM-dd HH:mm:ss`, local time), or click Now. Invalid dates cannot be saved.
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
+- Working tickets can also be edited and saved with only RITM while their details are still incomplete.
 - The app opens Draft by default. New notes default to Draft with Low priority.
 - Click the Created column heading to switch between newest-first and oldest-first order.
 - Search RITM, CHG, titles, or note text; filter by priority.
@@ -42,6 +43,8 @@ Writes are locked across app instances. If another instance or external tool cha
 
 Update every Mac to 1.2.1 or newer before using Closed with iCloud. Older app versions cannot read that new workflow value and may pause rather than load the notes.
 
+Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
+
 Older versions did not record creation time. Their last-modified timestamp is used as the initial creation time and preserved on subsequent edits. The original creation time cannot be reconstructed.
 
 ## Develop and test
@@ -65,7 +68,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.2.1 BUILD_NUMBER=23 ./scripts/build-app.sh
+MARKETING_VERSION=1.2.2 BUILD_NUMBER=24 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -112,20 +115,22 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.2.1)
+## Release acceptance gates (1.2.2)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 
 - Run all tests and build a universal archive; verify SHA256SUMS and the bundle signature.
-- On a disposable test account, verify selecting, double-click editing, bold/undo, manual Created input (including invalid dates), sorting, deletion confirmation, and moving between all five workflows. Reopen the app to check persistence.
+- On a disposable test account, verify selecting, double-click editing, bold/undo, manual Created input (including invalid dates), sorting, deletion confirmation, and moving between all six workflows. Confirm Working appears between Draft and Pending Approval. Reopen the app to check persistence.
 - Verify unsaved edits trigger a warning on both editor close and Command-Q; Keep Editing must preserve the text.
 - Verify the packaged app on macOS 14 and on an Intel Mac; building both architectures is not the same as running on both.
 - Configure the real Apple Developer team, Production CloudKit schema, matching profile/certificate, and notarization credentials. Build with both REQUIRE_NOTARIZATION=1 and REQUIRE_ICLOUD=1. Require successful stapler validation and Gatekeeper assessment.
-- Test the signed build on two Macs using a separate test iCloud account: initial merge, offline edit/reconnect, Closed, deletion without resurrection, conflict recovery, and account-switch protection. Simulated sync tests do not verify Apple's live service.
-- Back up the local data folder before upgrading. Upgrade all participating Macs before syncing the new Closed status. Avoid downgrading the data archive.
+- Test the signed build on two Macs using a separate test iCloud account: initial merge, offline edit/reconnect, Working and Closed, deletion without resurrection, conflict recovery, and account-switch protection. Simulated sync tests do not verify Apple's live service.
+- Back up the local data folder before upgrading. Upgrade all participating Macs before syncing the new Working status. Avoid downgrading the data archive.
 - Upload only the validated, notarized ZIP and its matching checksum to the draft release, then publish after all checks pass. Never publish private ticket data, profiles, certificates, or credentials.
 
-Current local artifacts are ad-hoc signed. Live CloudKit, notarization, and the manual runtime checks above remain unverified until their prerequisites are available.
+The local 1.2.2 UI smoke check confirmed workflow order and filtering, single-click selection, double-click editing, Low priority by default, invalid Created-date rejection, enabled saving for RITM-only Working notes, and unsaved-edit warnings on close and Command-Q. Test edits were cancelled without saving. This does not replace the full acceptance checks above.
+
+Current local artifacts are ad-hoc signed. Live CloudKit, notarization, macOS 14/Intel runtime checks, and remaining full acceptance scenarios still require validation before public release.
 
 ## GitHub builds
 

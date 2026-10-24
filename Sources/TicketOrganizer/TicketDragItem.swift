@@ -24,6 +24,7 @@ struct WorkflowDropRow: View {
     private var icon: String {
         switch stage {
         case .draft: "note.text"
+        case .working: "hammer"
         case .approval: "paperplane"
         case .approved: "checkmark.circle"
         case .example: "star"

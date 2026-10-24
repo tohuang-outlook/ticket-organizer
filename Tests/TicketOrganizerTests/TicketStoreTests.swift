@@ -4,6 +4,28 @@ import Darwin
 
 final class TicketStoreTests: XCTestCase {
     @MainActor
+    func testRITMOnlyWorkingTicketCanBeEditedAndReopened() async throws {
+        XCTAssertTrue(TicketStage.draft.allowsIncompleteDetails)
+        XCTAssertTrue(TicketStage.working.allowsIncompleteDetails)
+        XCTAssertFalse(TicketStage.approval.allowsIncompleteDetails)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        let original = TicketNote(ritm: "RITM123456", chg: "", title: "", body: "", stage: .draft, priority: .low, owner: "")
+        try store.add(original)
+        try store.moveTicket(id: original.id, to: .working)
+        var edited = try XCTUnwrap(store.notes.first)
+        edited.body = "Work in progress"
+        try store.update(edited)
+        let reopened = try XCTUnwrap(TicketStore(url: url).notes.first)
+        XCTAssertEqual(reopened.stage, .working)
+        XCTAssertEqual(reopened.body, edited.body)
+        XCTAssertTrue(reopened.chg.isEmpty)
+        XCTAssertEqual(reopened.createdAt, original.createdAt)
+    }
+
+    @MainActor
     func testBusyWriterLockFailsWithoutOverwritingData() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -54,9 +76,12 @@ final class TicketStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
-    func testClosedWorkflowFollowsExamplesAndRoundTrips() throws {
-        XCTAssertEqual(TicketStage.allCases.map(\.shortTitle), ["Draft", "Pending Approval", "Approved", "Examples", "Closed"])
-        XCTAssertEqual(try JSONDecoder().decode(TicketStage.self, from: JSONEncoder().encode(TicketStage.closed)), .closed)
+    func testWorkflowOrderAndPersistedValuesRoundTrip() throws {
+        XCTAssertEqual(TicketStage.allCases.map(\.shortTitle), ["Draft", "Working", "Pending Approval", "Approved", "Examples", "Closed"])
+        XCTAssertEqual(TicketStage.allCases.map(\.rawValue), ["draft", "working", "approval", "approved", "example", "closed"])
+        for stage in TicketStage.allCases {
+            XCTAssertEqual(try JSONDecoder().decode(TicketStage.self, from: JSONEncoder().encode(stage)), stage)
+        }
     }
 
     @MainActor

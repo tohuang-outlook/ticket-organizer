@@ -20,11 +20,12 @@ struct TicketOrganizerApp: App {
 extension Notification.Name { static let newTicket = Notification.Name("newTicket") }
 
 enum TicketStage: String, Codable, CaseIterable, Identifiable {
-    case draft, approval, approved, example, closed
+    case draft, working, approval, approved, example, closed
     var id: String { rawValue }
-    var title: String { switch self { case .draft: "Draft"; case .approval: "UCSF ticket send for approve"; case .approved: "Approved"; case .example: "UCSF ticket example"; case .closed: "Closed" } }
-    var shortTitle: String { switch self { case .draft: "Draft"; case .approval: "Pending Approval"; case .approved: "Approved"; case .example: "Examples"; case .closed: "Closed" } }
-    var color: Color { switch self { case .draft: .secondary; case .approval: .orange; case .approved: .green; case .example: .purple; case .closed: .gray } }
+    var allowsIncompleteDetails: Bool { self == .draft || self == .working }
+    var title: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "UCSF ticket send for approve"; case .approved: "Approved"; case .example: "UCSF ticket example"; case .closed: "Closed" } }
+    var shortTitle: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "Pending Approval"; case .approved: "Approved"; case .example: "Examples"; case .closed: "Closed" } }
+    var color: Color { switch self { case .draft: .secondary; case .working: .blue; case .approval: .orange; case .approved: .green; case .example: .purple; case .closed: .gray } }
 }
 
 enum Priority: String, Codable, CaseIterable, Identifiable {
@@ -321,7 +322,7 @@ struct EditTicketView: View {
             TextField("Note title", text: $title)
             RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack { Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B Bold").font(.caption).foregroundStyle(.secondary) }
-            HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (stage != .draft && [chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })) }
+            HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (!stage.allowsIncompleteDetails && [chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)
         .onChange(of: [ritm, chg, title, bodyText, stage.rawValue, priority.rawValue]) { _, _ in onDirtyChange(true) }
         .onChange(of: richBody) { _, _ in onDirtyChange(true) }

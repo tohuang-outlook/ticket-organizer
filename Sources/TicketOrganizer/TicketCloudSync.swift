@@ -31,7 +31,7 @@ final class TicketCloudSync: ObservableObject {
         }
         if automatic {
             accountObserver = NotificationCenter.default.addObserver(forName: .CKAccountChanged, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     self?.generation += 1
                     self?.scheduled?.cancel()
                     self?.status = "Checking iCloud Account"

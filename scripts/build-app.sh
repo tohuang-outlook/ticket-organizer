@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 VERSION="${MARKETING_VERSION:-1.0.0}"
+VERSION="${VERSION#v}"
 BUILD="${BUILD_NUMBER:-1}"
 ARCH="$(uname -m)"
 swift build -c release
@@ -36,6 +37,12 @@ PLIST
 sed -i '' "s/__VERSION__/$VERSION/g; s/__BUILD__/$BUILD/g" "$APP/Contents/Info.plist"
 if [ -n "${SIGNING_IDENTITY:-}" ]; then codesign --force --deep --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"; fi
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ROOT/dist/Ticket-Organizer-$VERSION.zip"
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  xcrun notarytool submit "$ROOT/dist/Ticket-Organizer-$VERSION.zip" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  ditto -c -k --sequesterRsrc --keepParent "$APP" "$ROOT/dist/Ticket-Organizer-$VERSION.zip"
+fi
 shasum -a 256 "$ROOT/dist/Ticket-Organizer-$VERSION.zip" > "$ROOT/dist/SHA256SUMS"
 echo "Built: $APP"
 echo "Archive: $ROOT/dist/Ticket-Organizer-$VERSION.zip"

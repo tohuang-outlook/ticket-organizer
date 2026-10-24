@@ -71,11 +71,28 @@ final class TicketStore: ObservableObject {
 struct ContentView: View {
     @StateObject private var store = TicketStore()
     @State private var selection: TicketStage? = nil
-    @State private var selectedNote: TicketNote?
+    @State private var selectedID: UUID?
+    @State private var ticketToDelete: TicketNote?
+    @State private var showDeleteConfirmation = false
     @State private var query = ""
     @State private var showNew = false
     @State private var priority: Priority? = nil
     private var filtered: [TicketNote] { store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) } }
+    private var selectedTicket: TicketNote? { filtered.first { $0.id == selectedID } }
+
+    private func openTicket(_ id: UUID) {
+        guard let note = store.notes.first(where: { $0.id == id }) else { return }
+        selectedID = id
+        TicketEditorWindows.shared.open(note: note) { updated in
+            store.update(updated)
+        }
+    }
+
+    private func requestDeletion(_ note: TicketNote) {
+        selectedID = note.id
+        ticketToDelete = note
+        showDeleteConfirmation = true
+    }
     var body: some View {
         NavigationSplitView {
             Sidebar(store: store, selection: $selection, showNew: $showNew)
@@ -83,10 +100,44 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "All Ticket Notes").font(.system(size: 48, weight: .bold)); Text("Keep RITM, CHG, and implementation notes together. Send them for approval when ready.").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("New Note", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
                 Divider()
-                HStack { TextField("Search RITM, CHG, or notes", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("Priority", selection: $priority) { Text("All Priorities").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) notes").foregroundStyle(.secondary).font(.caption) }.padding(.horizontal, 28).padding(.vertical, 14)
-                List(selection: $selectedNote) { Section { ForEach(filtered) { note in NoteRow(note: note).tag(Optional(note)).contentShape(Rectangle()).onTapGesture(count: 2) { TicketEditorWindows.shared.open(note: note) { store.update($0); selectedNote = $0 } } } } header: { TableHeader() } }.listStyle(.inset)
-            }.sheet(isPresented: $showNew) { NewTicketView { store.add($0); selectedNote = $0 } }
-        }.inspector(isPresented: Binding(get: { selectedNote != nil }, set: { if !$0 { selectedNote = nil } })) { if let note = selectedNote { DetailView(note: note, store: store, onDelete: { store.delete(note); selectedNote = nil }) } }
+                HStack { TextField("Search RITM, CHG, or notes", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("Priority", selection: $priority) { Text("All Priorities").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) notes").foregroundStyle(.secondary).font(.caption)
+                    Button(role: .destructive) {
+                        if let note = selectedTicket { requestDeletion(note) }
+                    } label: { Label("Delete Selected Ticket", systemImage: "trash") }
+                    .disabled(selectedTicket == nil)
+                }.padding(.horizontal, 28).padding(.vertical, 14)
+                List(selection: $selectedID) {
+                    Section {
+                        ForEach(filtered) { note in
+                            NoteRow(note: note).tag(note.id).contentShape(Rectangle())
+                        }
+                    } header: { TableHeader() }
+                }
+                .listStyle(.inset)
+                .contextMenu(forSelectionType: UUID.self) { ids in
+                    if let id = ids.first, let note = filtered.first(where: { $0.id == id }) {
+                        Button("Open Ticket") { openTicket(id) }
+                        Button("Delete Ticket", role: .destructive) { requestDeletion(note) }
+                    }
+                } primaryAction: { ids in
+                    if let id = ids.first { openTicket(id) }
+                }
+            }.sheet(isPresented: $showNew) { NewTicketView { store.add($0); selectedID = $0.id } }
+        }
+        .alert("Delete this ticket?", isPresented: $showDeleteConfirmation, presenting: ticketToDelete) { note in
+            Button("Cancel", role: .cancel) { ticketToDelete = nil }
+            Button("Delete", role: .destructive) {
+                TicketEditorWindows.shared.close(note.id)
+                store.delete(note)
+                selectedID = nil
+                ticketToDelete = nil
+            }
+        } message: { note in
+            Text("\(note.ritm) / \(note.chg) will be permanently deleted. This action cannot be undone.")
+        }
+        .onChange(of: filtered.map(\.id)) { _, ids in
+            if let id = selectedID, !ids.contains(id) { selectedID = nil }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newTicket)) { _ in showNew = true }
     }
 }
@@ -161,6 +212,10 @@ struct EditTicketView: View {
 final class TicketEditorWindows: NSObject, NSWindowDelegate {
     static let shared = TicketEditorWindows()
     private var windows: [UUID: NSWindow] = [:]
+
+    func close(_ id: UUID) {
+        windows[id]?.close()
+    }
 
     func open(note: TicketNote, onSave: @escaping (TicketNote) -> Void) {
         if let existing = windows[note.id] {

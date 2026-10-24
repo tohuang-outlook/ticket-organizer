@@ -61,6 +61,7 @@ final class TicketStore: ObservableObject {
     }
     func save() { if let data = try? JSONEncoder().encode(notes) { try? data.write(to: url, options: .atomic) } }
     func add(_ note: TicketNote) { notes.insert(note, at: 0); save() }
+    func delete(_ note: TicketNote) { notes.removeAll { $0.id == note.id }; save() }
     func update(_ note: TicketNote) { guard let i = notes.firstIndex(where: { $0.id == note.id }) else { return }; notes[i] = note; notes[i].updatedAt = Date(); save() }
     func move(_ note: TicketNote, to stage: TicketStage) { guard let i = notes.firstIndex(of: note) else { return }; notes[i].stage = stage; notes[i].updatedAt = Date(); save() }
 }
@@ -84,7 +85,7 @@ struct ContentView: View {
                 HStack { TextField("搜索 RITM、CHG 或笔记内容", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("优先级", selection: $priority) { Text("全部优先级").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) 条记录").foregroundStyle(.secondary).font(.caption) }.padding(.horizontal, 28).padding(.vertical, 14)
                 List(selection: $selectedNote) { Section { ForEach(filtered) { note in NoteRow(note: note).tag(Optional(note)).contentShape(Rectangle()).onTapGesture(count: 2) { editingNote = note } } } header: { TableHeader() } }.listStyle(.inset)
             }.sheet(isPresented: $showNew) { NewTicketView { store.add($0); selectedNote = $0 } }.sheet(item: $editingNote) { note in EditTicketView(note: note) { store.update($0); selectedNote = $0 } }
-        }.inspector(isPresented: Binding(get: { selectedNote != nil }, set: { if !$0 { selectedNote = nil } })) { if let note = selectedNote { DetailView(note: note, store: store) } }
+        }.inspector(isPresented: Binding(get: { selectedNote != nil }, set: { if !$0 { selectedNote = nil } })) { if let note = selectedNote { DetailView(note: note, store: store, onDelete: { store.delete(note); selectedNote = nil }) } }
         .onReceive(NotificationCenter.default.publisher(for: .newTicket)) { _ in showNew = true }
     }
 }
@@ -108,7 +109,7 @@ struct NoteRow: View {
     }
 }
 
-struct DetailView: View { let note: TicketNote; @ObservedObject var store: TicketStore; var body: some View { VStack(alignment: .leading, spacing: 18) { Text("工单详情").font(.headline); Text("\(note.ritm), \(note.chg)").font(.system(.title3, design: .monospaced)).bold(); Divider(); Text(note.title).font(.title2.bold()); Text(note.body).textSelection(.enabled); Spacer(); HStack { Button("移回草稿") { store.move(note, to: .draft) }.disabled(note.stage == .draft); Button("送审批") { store.move(note, to: .approval) }.disabled(note.stage == .approval); Button("设为示例") { store.move(note, to: .example) }.disabled(note.stage == .example) }.buttonStyle(.borderedProminent) }.padding(24).frame(minWidth: 320, alignment: .leading) } }
+struct DetailView: View { let note: TicketNote; @ObservedObject var store: TicketStore; var onDelete: () -> Void; @State private var confirmDelete = false; var body: some View { VStack(alignment: .leading, spacing: 18) { Text("工单详情").font(.headline); Text("\(note.ritm), \(note.chg)").font(.system(.title3, design: .monospaced)).bold(); Divider(); Text(note.title).font(.title2.bold()); Text(note.body).textSelection(.enabled); Spacer(); HStack { Button("移回草稿") { store.move(note, to: .draft) }.disabled(note.stage == .draft); Button("送审批") { store.move(note, to: .approval) }.disabled(note.stage == .approval); Button("设为示例") { store.move(note, to: .example) }.disabled(note.stage == .example); Spacer(); Button("删除工单", role: .destructive) { confirmDelete = true } }.buttonStyle(.borderedProminent) }.padding(24).frame(minWidth: 320, alignment: .leading).alert("删除这条工单？", isPresented: $confirmDelete) { Button("取消", role: .cancel) {}; Button("删除", role: .destructive) { onDelete() } } message: { Text("删除后将从列表和本地保存数据中移除，无法恢复。") } } }
 
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss

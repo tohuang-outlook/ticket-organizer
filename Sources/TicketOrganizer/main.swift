@@ -39,6 +39,7 @@ struct TicketNote: Identifiable, Codable, Hashable {
     var priority: Priority
     var owner: String
     var updatedAt = Date()
+    var richBody: Data? = nil
 }
 
 @MainActor
@@ -95,7 +96,7 @@ struct Sidebar: View {
     var body: some View { List { Section { Button { selection = nil } label: { Label("全部笔记", systemImage: "tray.full").font(.system(size: 14)) }.buttonStyle(.plain).foregroundStyle(selection == nil ? .primary : .secondary) } header: { Text("工单笔记").font(.system(size: 14, weight: .semibold)) }; Section("流程") { ForEach(TicketStage.allCases) { stage in Button { selection = stage } label: { HStack { Image(systemName: stage == .draft ? "note.text" : stage == .approval ? "paperplane" : "star") .foregroundStyle(stage.color); Text(stage.shortTitle).font(.system(size: 14)); Spacer(); Text("\(store.notes.filter { $0.stage == stage }.count)").foregroundStyle(.secondary).font(.system(size: 12)) }.contentShape(Rectangle()) }.buttonStyle(.plain).foregroundStyle(selection == stage ? .primary : .secondary) } }; Section { Button { showNew = true } label: { Label("新建工单笔记", systemImage: "plus.circle").font(.system(size: 14)) }.buttonStyle(.plain) } } .listStyle(.sidebar).navigationTitle("Ticket Organizer") }
 }
 
-struct TableHeader: View { var body: some View { HStack { Text("工单编号").frame(width: 180, alignment: .leading); Text("流程状态").frame(width: 135, alignment: .leading); Text("优先级").frame(width: 75, alignment: .leading); Text("笔记内容").frame(maxWidth: .infinity, alignment: .leading); Text("负责人").frame(width: 110, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }
+struct TableHeader: View { var body: some View { HStack { Text("工单编号").frame(width: 180, alignment: .leading); Text("流程状态").frame(width: 135, alignment: .leading); Text("优先级").frame(width: 75, alignment: .leading); Text("笔记内容").frame(maxWidth: .infinity, alignment: .leading) }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8) } }
 struct NoteRow: View {
     let note: TicketNote
     var body: some View {
@@ -104,7 +105,6 @@ struct NoteRow: View {
             Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
             Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) { Text(note.title).font(.system(size: 16, weight: .semibold)); Text(note.body.replacingOccurrences(of: "\n", with: " · ")).lineLimit(1).font(.system(size: 14)).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading)
-            Text(note.owner).font(.caption).frame(width: 110, alignment: .leading)
         }.padding(.vertical, 6)
     }
 }
@@ -114,14 +114,15 @@ struct DetailView: View { let note: TicketNote; @ObservedObject var store: Ticke
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
     var onSave: (TicketNote) -> Void
-    @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .medium; @State private var owner = "Huang Chen"
+    @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .medium
+    @State private var richBody: Data?
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("新建工单笔记").font(.title2.bold())
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
             TextField("笔记标题", text: $title)
-            TextEditor(text: $bodyText).font(.system(size: 14)).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
-            HStack { Picker("优先级", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Picker("负责人", selection: $owner) { Text("Huang Chen").tag("Huang Chen"); Text("Jia Li").tag("Jia Li") }; Spacer(); Button("取消") { dismiss() }; Button("保存为草稿") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: owner)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+            RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
+            HStack { Picker("优先级", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("取消") { dismiss() }; Button("保存为草稿") { onSave(TicketNote(ritm: ritm, chg: chg, title: title, body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody)); dismiss() }.buttonStyle(.borderedProminent).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
         }.padding(24).frame(width: 580)
     }
 }
@@ -136,12 +137,12 @@ struct EditTicketView: View {
     @State private var bodyText: String
     @State private var stage: TicketStage
     @State private var priority: Priority
-    @State private var owner: String
+    @State private var richBody: Data?
 
     init(note: TicketNote, onClose: @escaping () -> Void, onSave: @escaping (TicketNote) -> Void) {
         original = note; self.onClose = onClose; self.onSave = onSave
         _ritm = State(initialValue: note.ritm); _chg = State(initialValue: note.chg); _title = State(initialValue: note.title)
-        _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _priority = State(initialValue: note.priority); _owner = State(initialValue: note.owner)
+        _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
     }
 
     var body: some View {
@@ -149,9 +150,9 @@ struct EditTicketView: View {
             Text("编辑工单笔记").font(.title2.bold())
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
             TextField("笔记标题", text: $title)
-            TextEditor(text: $bodyText).font(.system(size: 14)).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
-            HStack { Picker("流程状态", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("优先级", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Picker("负责人", selection: $owner) { Text("Huang Chen").tag("Huang Chen"); Text("Jia Li").tag("Jia Li") }; Spacer() }
-            HStack { Spacer(); Button("取消") { onClose() }.keyboardShortcut(.cancelAction); Button("保存修改") { var updated = original; updated.ritm = ritm; updated.chg = chg; updated.title = title; updated.body = bodyText; updated.stage = stage; updated.priority = priority; updated.owner = owner; onSave(updated); onClose() }.buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
+            RichNoteEditor(text: $bodyText, richBody: $richBody).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
+            HStack { Picker("流程状态", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("优先级", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B 粗体").font(.caption).foregroundStyle(.secondary) }
+            HStack { Spacer(); Button("取消") { onClose() }.keyboardShortcut(.cancelAction); Button("保存修改") { var updated = original; updated.ritm = ritm; updated.chg = chg; updated.title = title; updated.body = bodyText; updated.stage = stage; updated.priority = priority; updated.richBody = richBody; onSave(updated); onClose() }.buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.isEmpty || chg.isEmpty || title.isEmpty) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)
     }
 }

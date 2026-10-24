@@ -11,6 +11,7 @@
 - 数据自动保存到 macOS Application Support
 - 示例数据已按当前 UCSF / Panorama 工作流程预置
 - 支持 Git tag 触发 GitHub Actions，自动生成 macOS 发布包
+- 使用 UCSF 工单流程专属 App 图标
 
 ## 运行
 

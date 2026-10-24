@@ -5,6 +5,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 ## Daily use
 
 - Click once to select a ticket; double-click to open a movable, resizable editor.
+- The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 16 pt. Notes shows only the note title; the full body remains available in the editor and search.
 - Organize notes into Draft, Working, Pending Approval, Approved, Examples, and Closed.
 - Drag a ticket onto a workflow in the sidebar to move it. The target highlights on hover; successful drops save immediately and open the destination list.
 - Type the Created date and time directly when adding a note (`yyyy-MM-dd HH:mm:ss`, local time), or click Now. Invalid dates cannot be saved.
@@ -68,7 +69,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.2.2 BUILD_NUMBER=24 ./scripts/build-app.sh
+MARKETING_VERSION=1.2.3 BUILD_NUMBER=25 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -115,7 +116,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.2.2)
+## Release acceptance gates (1.2.3)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

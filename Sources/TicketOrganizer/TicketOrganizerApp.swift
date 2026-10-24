@@ -213,7 +213,8 @@ struct TableHeader: View {
     @Binding var newestFirst: Bool
     var body: some View {
         HStack {
-            Text("Ticket Numbers").frame(width: 180, alignment: .leading)
+            Text("Ticket Number").frame(width: 140, alignment: .leading)
+            Text("CHG Number").frame(width: 125, alignment: .leading)
             Button { newestFirst.toggle() } label: {
                 HStack(spacing: 5) { Text("Created"); Image(systemName: newestFirst ? "chevron.down" : "chevron.up") }
             }
@@ -221,23 +222,24 @@ struct TableHeader: View {
             .help(newestFirst ? "Newest first. Click for oldest first." : "Oldest first. Click for newest first.")
             .accessibilityLabel("Sort by created time")
             .accessibilityValue(newestFirst ? "Newest first" : "Oldest first")
-            .frame(width: 170, alignment: .leading)
+            .frame(width: 190, alignment: .leading)
             Text("Status").frame(width: 135, alignment: .leading)
             Text("Priority").frame(width: 75, alignment: .leading)
             Text("Notes").frame(maxWidth: .infinity, alignment: .leading)
-        }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
+        }.font(.system(size: 16)).foregroundStyle(.secondary)
     }
 }
 struct NoteRow: View {
     let note: TicketNote
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 3) { Text(note.ritm).font(.system(size: 16, design: .monospaced)).bold(); Text(note.chg).font(.system(size: 16, design: .monospaced)).foregroundStyle(.secondary) }.frame(width: 180, alignment: .leading)
-            Text(createdDateFormatter.string(from: note.createdAt)).font(.system(size: 14)).monospacedDigit().frame(width: 170, alignment: .leading)
+            Text(note.ritm).font(.system(size: 16, design: .monospaced)).bold().lineLimit(1).help(note.ritm).frame(width: 140, alignment: .leading)
+            Text(note.chg).font(.system(size: 16, design: .monospaced)).lineLimit(1).help(note.chg).frame(width: 125, alignment: .leading)
+            Text(createdDateFormatter.string(from: note.createdAt)).monospacedDigit().lineLimit(1).frame(width: 190, alignment: .leading)
             Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
             Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)
-            VStack(alignment: .leading, spacing: 3) { Text(note.title).font(.system(size: 16, weight: .semibold)); Text(note.body.replacingOccurrences(of: "\n", with: " · ")).lineLimit(1).font(.system(size: 14)).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(.vertical, 6)
+            Text(note.title).fontWeight(.semibold).lineLimit(1).truncationMode(.tail).help(note.title).frame(maxWidth: .infinity, alignment: .leading)
+        }.font(.system(size: 16)).padding(.vertical, 6)
     }
 }
 

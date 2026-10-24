@@ -24,11 +24,16 @@ struct RichNoteEditor: NSViewRepresentable {
         editor.textContainer?.widthTracksTextView = true
         editor.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         editor.textContainerInset = NSSize(width: 8, height: 10)
-        editor.font = .systemFont(ofSize: 14)
+        editor.font = .systemFont(ofSize: 16)
         editor.textColor = .textColor
         editor.delegate = context.coordinator
         if let data = richBody, let attributed = NSAttributedString(rtf: data, documentAttributes: nil) {
-            editor.textStorage?.setAttributedString(attributed)
+            let resized = NSMutableAttributedString(attributedString: attributed)
+            resized.enumerateAttribute(.font, in: NSRange(location: 0, length: resized.length)) { value, range, _ in
+                let font = value as? NSFont ?? .systemFont(ofSize: 16)
+                resized.addAttribute(.font, value: NSFontManager.shared.convert(font, toSize: 16), range: range)
+            }
+            editor.textStorage?.setAttributedString(resized)
         } else {
             editor.string = text
         }
@@ -66,7 +71,7 @@ final class BoldNoteTextView: NSTextView {
         let range = selectedRange()
         let manager = NSFontManager.shared
         if range.length == 0 {
-            let font = typingAttributes[.font] as? NSFont ?? .systemFont(ofSize: 14)
+            let font = typingAttributes[.font] as? NSFont ?? .systemFont(ofSize: 16)
             let bold = manager.traits(of: font).contains(.boldFontMask)
             typingAttributes[.font] = bold ? manager.convert(font, toNotHaveTrait: .boldFontMask) : manager.convert(font, toHaveTrait: .boldFontMask)
             return
@@ -76,10 +81,10 @@ final class BoldNoteTextView: NSTextView {
         let fullRange = NSRange(location: 0, length: replacement.length)
         var allBold = true
         replacement.enumerateAttribute(.font, in: fullRange) { value, _, _ in
-            if !manager.traits(of: value as? NSFont ?? .systemFont(ofSize: 14)).contains(.boldFontMask) { allBold = false }
+            if !manager.traits(of: value as? NSFont ?? .systemFont(ofSize: 16)).contains(.boldFontMask) { allBold = false }
         }
         replacement.enumerateAttribute(.font, in: fullRange) { value, subrange, _ in
-            let font = value as? NSFont ?? .systemFont(ofSize: 14)
+            let font = value as? NSFont ?? .systemFont(ofSize: 16)
             let converted = allBold ? manager.convert(font, toNotHaveTrait: .boldFontMask) : manager.convert(font, toHaveTrait: .boldFontMask)
             replacement.addAttribute(.font, value: converted, range: subrange)
         }

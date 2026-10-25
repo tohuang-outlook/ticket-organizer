@@ -94,7 +94,7 @@ struct ContentView: View {
     @State private var query = ""
     @State private var showNew = false
     @State private var priority: Priority? = nil
-    @State private var newestFirst = true
+    @State private var newestFirst = false
     private var filtered: [TicketNote] {
         TicketNote.sortedByCreation(store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) }, newestFirst: newestFirst)
     }

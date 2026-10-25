@@ -234,7 +234,7 @@ struct NoteRow: View {
     var body: some View {
         HStack {
             Text(note.ritm).font(.system(size: 18, design: .monospaced)).bold().lineLimit(1).help(note.ritm).frame(width: 150, alignment: .leading)
-            Text(note.chg).font(.system(size: 18, design: .monospaced)).lineLimit(1).help(note.chg).frame(width: 135, alignment: .leading)
+            Text(note.chg).font(.system(size: 18, design: .monospaced)).foregroundStyle(.blue).lineLimit(1).help(note.chg).frame(width: 135, alignment: .leading)
             Text(createdDateFormatter.string(from: note.createdAt)).monospacedDigit().lineLimit(1).frame(width: 190, alignment: .leading)
             Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
             Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)

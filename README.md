@@ -16,7 +16,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Tickets are ordered oldest-first on launch. Click Created to toggle between oldest-first and newest-first.
 - Click the Created column heading to switch between newest-first and oldest-first order.
 - Search RITM, CHG, titles, or note text; filter by priority.
-- Select text and press Command-B to toggle bold. The body starts at 16 pt. Press Command-period to increase the whole note by 2 pt or Command-minus to decrease it; font size is saved with the note and ranges from 10 to 48 pt.
+- Select text and press Command-B to toggle bold. The body starts at 16 pt. Press Command-period (or Command-plus) to increase the whole note by 2 pt or Command-minus to decrease it; font size is saved with the note and ranges from 10 to 48 pt.
 - Press Command-S in the editor to save. Changes close the editor only after saving succeeds.
 - Quitting with unsaved ticket editors asks before discarding their changes.
 - Delete the selected ticket with Delete Selected Ticket or its context menu, then confirm.
@@ -71,7 +71,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.2.6 BUILD_NUMBER=28 ./scripts/build-app.sh
+MARKETING_VERSION=1.2.7 BUILD_NUMBER=29 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -118,7 +118,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.2.6)
+## Release acceptance gates (1.2.7)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

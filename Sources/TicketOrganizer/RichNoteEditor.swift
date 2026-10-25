@@ -111,23 +111,38 @@ final class BoldNoteTextView: NSTextView {
     var onFontSizeAdjustment: ((Int) -> Void)?
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard isEditable, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-              let key = event.charactersIgnoringModifiers?.lowercased() else {
-            return super.performKeyEquivalent(with: event)
-        }
+        if handleEditorShortcut(with: event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if handleEditorShortcut(with: event) { return }
+        super.keyDown(with: event)
+    }
+
+    private func handleEditorShortcut(with event: NSEvent) -> Bool {
+        guard isEditable else { return false }
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers.contains(.command), !modifiers.contains(.option), !modifiers.contains(.control) else { return false }
+
+        let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
         if key == "b" {
             toggleSelectionBold()
             return true
         }
-        if key == "." {
+        if key == "." || event.keyCode == 47 {
             onFontSizeAdjustment?(2)
             return true
         }
-        if key == "-" {
+        if key == "-" || event.keyCode == 27 || event.keyCode == 78 {
             onFontSizeAdjustment?(-2)
             return true
         }
-        return super.performKeyEquivalent(with: event)
+        if key == "+" || (event.keyCode == 24 && modifiers.contains(.shift)) {
+            onFontSizeAdjustment?(2)
+            return true
+        }
+        return false
     }
 
     private func toggleSelectionBold() {

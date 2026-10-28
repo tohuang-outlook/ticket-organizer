@@ -1,10 +1,25 @@
 import SwiftUI
 import AppKit
 
+@MainActor
+final class NoteFontSizeController: ObservableObject {
+    @Published private(set) var selectionFontSize: Int?
+    fileprivate var onAdjustSelection: ((Int) -> Void)?
+
+    func adjustSelection(by step: Int) {
+        onAdjustSelection?(step)
+    }
+
+    fileprivate func updateSelectionFontSize(_ size: Int?) {
+        selectionFontSize = size.map { min(48, max(10, $0)) }
+    }
+}
+
 struct RichNoteEditor: NSViewRepresentable {
     @Binding var text: String
     @Binding var richBody: Data?
     @Binding var fontSize: Int
+    var sizeController: NoteFontSizeController? = nil
     var editable = true
 
     static func preferredFontSize(from richBody: Data?) -> Int {
@@ -50,6 +65,7 @@ struct RichNoteEditor: NSViewRepresentable {
             guard let editor else { return }
             coordinator?.adjustFontSize(by: step, in: editor)
         }
+        context.coordinator.connectSizeController(sizeController, to: editor)
         if let data = richBody, let attributed = NSAttributedString(rtf: data, documentAttributes: nil) {
             editor.textStorage?.setAttributedString(resized(attributed, to: fontSize))
         } else {
@@ -62,15 +78,30 @@ struct RichNoteEditor: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.parent = self
+        context.coordinator.connectSizeController(sizeController, to: scroll.documentView as? BoldNoteTextView)
         guard context.coordinator.appliedFontSize != fontSize,
               let editor = scroll.documentView as? BoldNoteTextView else { return }
         context.coordinator.applyFontSize(fontSize, to: editor, notifyChange: true)
     }
 
+    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+        coordinator.sizeController?.onAdjustSelection = nil
+    }
+
+    @MainActor
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichNoteEditor
         var appliedFontSize = 16
+        weak var sizeController: NoteFontSizeController?
         init(_ parent: RichNoteEditor) { self.parent = parent }
+
+        func connectSizeController(_ controller: NoteFontSizeController?, to editor: BoldNoteTextView?) {
+            sizeController = controller
+            controller?.onAdjustSelection = { [weak self, weak editor] step in
+                guard let self, let editor else { return }
+                self.adjustSelectedFontSize(by: step, in: editor)
+            }
+        }
 
         func adjustFontSize(by step: Int, in editor: BoldNoteTextView) {
             let size = min(48, max(10, parent.fontSize + step))
@@ -103,21 +134,69 @@ struct RichNoteEditor: NSViewRepresentable {
 
             // Replacing the entire attributed string moves NSTextView's insertion
             // point to the end and scrolls there. Restore the viewport after layout.
-            let restoreViewport = { [weak scrollView, weak editor] in
-                guard let scrollView, let editor else { return }
-                if let container = editor.textContainer {
-                    editor.layoutManager?.ensureLayout(for: container)
-                }
-                scrollView.layoutSubtreeIfNeeded()
-                let clipView = scrollView.contentView
-                let documentSize = scrollView.documentView?.bounds.size ?? .zero
-                let maxX = max(0, documentSize.width - clipView.bounds.width)
-                let maxY = max(0, documentSize.height - clipView.bounds.height)
-                clipView.scroll(to: NSPoint(x: min(scrollOrigin.x, maxX), y: min(scrollOrigin.y, maxY)))
-                scrollView.reflectScrolledClipView(clipView)
+            restoreViewport(of: editor, in: scrollView, to: scrollOrigin)
+            refreshSelectionFontSize(in: editor)
+            Task { @MainActor [weak self, weak scrollView, weak editor] in
+                guard let self, let scrollView, let editor else { return }
+                self.restoreViewport(of: editor, in: scrollView, to: scrollOrigin)
             }
-            restoreViewport()
-            DispatchQueue.main.async(execute: restoreViewport)
+        }
+
+        private func adjustSelectedFontSize(by step: Int, in editor: BoldNoteTextView) {
+            let range = editor.selectedRange()
+            guard range.length > 0, let storage = editor.textStorage, NSMaxRange(range) <= storage.length else { return }
+            let currentFont = storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont ?? .systemFont(ofSize: CGFloat(parent.fontSize))
+            let size = min(48, max(10, Int(currentFont.pointSize.rounded()) + step))
+            guard size != Int(currentFont.pointSize.rounded()) else { return }
+
+            let scrollView = editor.enclosingScrollView
+            let clipView = scrollView?.contentView
+            let scrollOrigin = clipView?.bounds.origin ?? .zero
+            let resized = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
+            resized.enumerateAttribute(.font, in: NSRange(location: 0, length: resized.length)) { value, subrange, _ in
+                let font = value as? NSFont ?? currentFont
+                resized.addAttribute(.font, value: NSFontManager.shared.convert(font, toSize: CGFloat(size)), range: subrange)
+            }
+            editor.insertText(resized, replacementRange: range)
+            editor.setSelectedRange(range)
+            editor.undoManager?.setActionName("Change Selected Text Size")
+            editor.didChangeText()
+            sizeController?.updateSelectionFontSize(size)
+            restoreViewport(of: editor, in: scrollView, to: scrollOrigin)
+            Task { @MainActor [weak self, weak editor, weak scrollView] in
+                guard let self, let editor else { return }
+                self.restoreViewport(of: editor, in: scrollView, to: scrollOrigin)
+            }
+        }
+
+        private func restoreViewport(of editor: BoldNoteTextView, in scrollView: NSScrollView?, to origin: NSPoint) {
+            guard let scrollView else { return }
+            if let container = editor.textContainer { editor.layoutManager?.ensureLayout(for: container) }
+            scrollView.layoutSubtreeIfNeeded()
+            let clipView = scrollView.contentView
+            let documentSize = scrollView.documentView?.bounds.size ?? .zero
+            let maxX = max(0, documentSize.width - clipView.bounds.width)
+            let maxY = max(0, documentSize.height - clipView.bounds.height)
+            clipView.scroll(to: NSPoint(x: min(origin.x, maxX), y: min(origin.y, maxY)))
+            scrollView.reflectScrolledClipView(clipView)
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let editor = notification.object as? NSTextView else { return }
+            refreshSelectionFontSize(in: editor)
+        }
+
+        private func refreshSelectionFontSize(in editor: NSTextView) {
+            guard let controller = sizeController else { return }
+            let range = editor.selectedRange()
+            guard range.length > 0,
+                  let storage = editor.textStorage,
+                  range.location < storage.length,
+                  let font = storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont else {
+                controller.updateSelectionFontSize(nil)
+                return
+            }
+            controller.updateSelectionFontSize(Int(font.pointSize.rounded()))
         }
 
         func textDidChange(_ notification: Notification) {

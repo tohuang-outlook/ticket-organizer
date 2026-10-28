@@ -14,6 +14,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Warn when an entered RITM already exists, with the matching CHG, status, and title. The warning does not block intentional duplicates.
 - Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
 - Keep the current text and scroll position visible when changing body font size with Command-period or Command-minus.
+- Use the bottom A−/A+ controls to change only highlighted plan text by 2 pt; the controls show the selected text size and are disabled when nothing is selected.
 - Working tickets can also be edited and saved with only RITM while their details are still incomplete.
 - The app opens Draft by default. New notes default to Draft with Low priority.
 - Tickets are ordered oldest-first on launch. Click Created to toggle between oldest-first and newest-first.
@@ -79,7 +80,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.5 BUILD_NUMBER=41 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.6 BUILD_NUMBER=42 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -126,13 +127,14 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.5)
+## Release acceptance gates (1.4.6)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 
 - Run all tests and build a universal archive; verify SHA256SUMS and the bundle signature.
 - On a disposable test account, verify selecting, double-click editing, bold/undo, manual Created input on creation and editing (including invalid dates), editing Created time then confirming the ticket re-sorts, duplicate RITM warnings on create and edit (including Closed matches), and intentional duplicate saves. Verify deletion confirmation, marking/unmarking Important without changing workflow status, and moving between workflows. Confirm Working appears between Draft and Pending Approval, Completed between Approved and Important, and Open Notes excludes Closed tickets. Verify backup export, restore confirmation, recovery of deleted/edited tickets, and pre-restore safety backup creation.
 - Confirm list and sidebar text are 18 pt. In the body editor, verify Command-period/Command-minus adjust all text by 2 pt, preserve bold, remain within 10–48 pt, and persist after saving and reopening.
+- Select a portion of plan text and verify bottom A−/A+ changes only that selection by 2 pt, preserves bold, updates the displayed size, and persists after saving and reopening. Verify the controls are disabled without a selection.
 - While the text cursor or selection is in the middle and near the end of a long note, verify Command-period/Command-minus preserve the current viewport instead of scrolling to the bottom.
 - Confirm full RITM identifiers fit beside the Important star and the table headers align with their columns. Confirm RITM is blue and bold, and CHG is high-contrast primary text with medium weight.
 - Verify unsaved edits trigger a warning on both editor close and Command-Q; Keep Editing must preserve the text.

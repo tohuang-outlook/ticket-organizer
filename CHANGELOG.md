@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.6
+
+- Add bottom A−/A+ controls to resize only the selected text in the plan editor.
+- Show the selected text size and disable the controls until text is selected.
+
 ## 1.4.5
 
 - Preserve the note editor's current scroll position when changing body text size with keyboard shortcuts.

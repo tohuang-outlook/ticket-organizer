@@ -383,6 +383,27 @@ private struct DuplicateRITMWarning: View {
     }
 }
 
+private struct SelectionFontSizeControl: View {
+    @ObservedObject var controller: NoteFontSizeController
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("Selected text size")
+            Button("A−") { controller.adjustSelection(by: -2) }
+                .accessibilityLabel("Decrease selected text size")
+            Text(controller.selectionFontSize.map { "\($0) pt" } ?? "Select text")
+                .font(.caption.monospacedDigit())
+                .frame(minWidth: 64)
+                .foregroundStyle(.secondary)
+            Button("A+") { controller.adjustSelection(by: 2) }
+                .accessibilityLabel("Increase selected text size")
+        }
+        .controlSize(.small)
+        .disabled(controller.selectionFontSize == nil)
+        .help("Select text in the plan to change only that text's size.")
+    }
+}
+
 
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
@@ -391,6 +412,7 @@ struct NewTicketView: View {
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
     @State private var bodyFontSize = 16
+    @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
     private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes) }
@@ -423,8 +445,8 @@ struct NewTicketView: View {
                 .font(.caption).foregroundStyle(.secondary)
             Text("Change, Backout, and Validation Plan")
                 .font(.headline)
-            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
-            HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
+            HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 580)
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
@@ -445,6 +467,7 @@ struct EditTicketView: View {
     @State private var priority: Priority
     @State private var richBody: Data?
     @State private var bodyFontSize: Int
+    @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText: String
     @State private var saveError: String?
 
@@ -494,7 +517,13 @@ struct EditTicketView: View {
             }
             Text("Change, Backout, and Validation Plan")
                 .font(.headline)
-            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
+            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
+            HStack {
+                SelectionFontSizeControl(controller: fontSizeController)
+                Spacer()
+                Text("⌘B Bold · ⌘. / ⌘+ Larger · ⌘- Smaller")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }
                 Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }
@@ -502,7 +531,6 @@ struct EditTicketView: View {
                     .toggleStyle(.checkbox)
                     .help("Mark this ticket as important without changing its workflow status.")
                 Spacer()
-                Text("⌘B Bold · ⌘. Larger · ⌘- Smaller · \(bodyFontSize) pt").font(.caption).foregroundStyle(.secondary)
             }
             HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (!stage.allowsIncompleteDetails && [chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.9
+
+- Set the RITM, CHG, and note title input text in the ticket editor to 18 pt.
+
 ## 1.4.8
 
 - Fix selected text size controls so they change the actual text formatting and support undo and redo.

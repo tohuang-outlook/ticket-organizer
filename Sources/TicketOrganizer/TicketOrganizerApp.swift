@@ -504,9 +504,12 @@ struct EditTicketView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Edit Ticket Note").font(.title2.bold())
-            HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
+            HStack {
+                LabeledContent("RITM") { TextField("RITM0767540", text: $ritm).font(.system(size: 18)) }
+                LabeledContent("CHG") { TextField("CHG0197325", text: $chg).font(.system(size: 18)) }
+            }
             DuplicateRITMWarning(matches: duplicateMatches)
-            TextField("Note title", text: $title)
+            TextField("Note title", text: $title).font(.system(size: 18))
             HStack {
                 LabeledContent("Created") {
                     TextField("yyyy-MM-dd HH:mm:ss", text: $createdTimeText)

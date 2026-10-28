@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.7
+
+- Replace the small A−/A+ size icons with labeled, bordered Smaller and Larger buttons for clearer, easier clicking.
+- Show “Select text first” when no selection is active.
+
 ## 1.4.6
 
 - Add bottom A−/A+ controls to resize only the selected text in the plan editor.

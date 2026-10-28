@@ -387,16 +387,18 @@ private struct SelectionFontSizeControl: View {
     @ObservedObject var controller: NoteFontSizeController
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text("Selected text size")
-            Button("A−") { controller.adjustSelection(by: -2) }
-                .accessibilityLabel("Decrease selected text size")
-            Text(controller.selectionFontSize.map { "\($0) pt" } ?? "Select text")
+        HStack(spacing: 8) {
+            Text("Selected text size:")
+            Text(controller.selectionFontSize.map { "\($0) pt" } ?? "Select text first")
                 .font(.caption.monospacedDigit())
                 .frame(minWidth: 64)
                 .foregroundStyle(.secondary)
-            Button("A+") { controller.adjustSelection(by: 2) }
+            Button("− Smaller") { controller.adjustSelection(by: -2) }
+                .accessibilityLabel("Decrease selected text size")
+                .buttonStyle(.bordered)
+            Button("+ Larger") { controller.adjustSelection(by: 2) }
                 .accessibilityLabel("Increase selected text size")
+                .buttonStyle(.bordered)
         }
         .controlSize(.small)
         .disabled(controller.selectionFontSize == nil)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.5
+
+- Preserve the note editor's current scroll position when changing body text size with keyboard shortcuts.
+
 ## 1.4.4
 
 - Label the large ticket body editor as “Change, Backout, and Validation Plan” in new and edit windows.

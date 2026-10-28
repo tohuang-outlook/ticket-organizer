@@ -81,6 +81,9 @@ struct RichNoteEditor: NSViewRepresentable {
 
         func applyFontSize(_ size: Int, to editor: BoldNoteTextView, notifyChange: Bool) {
             let selection = editor.selectedRange()
+            let scrollView = editor.enclosingScrollView
+            let clipView = scrollView?.contentView
+            let scrollOrigin = clipView?.bounds.origin ?? .zero
             if let storage = editor.textStorage, storage.length > 0 {
                 let resized = NSMutableAttributedString(attributedString: storage)
                 resized.enumerateAttribute(.font, in: NSRange(location: 0, length: resized.length)) { value, range, _ in
@@ -97,6 +100,24 @@ struct RichNoteEditor: NSViewRepresentable {
             attributes[.font] = NSFontManager.shared.convert(font, toSize: CGFloat(size))
             editor.typingAttributes = attributes
             appliedFontSize = size
+
+            // Replacing the entire attributed string moves NSTextView's insertion
+            // point to the end and scrolls there. Restore the viewport after layout.
+            let restoreViewport = { [weak scrollView, weak editor] in
+                guard let scrollView, let editor else { return }
+                if let container = editor.textContainer {
+                    editor.layoutManager?.ensureLayout(for: container)
+                }
+                scrollView.layoutSubtreeIfNeeded()
+                let clipView = scrollView.contentView
+                let documentSize = scrollView.documentView?.bounds.size ?? .zero
+                let maxX = max(0, documentSize.width - clipView.bounds.width)
+                let maxY = max(0, documentSize.height - clipView.bounds.height)
+                clipView.scroll(to: NSPoint(x: min(scrollOrigin.x, maxX), y: min(scrollOrigin.y, maxY)))
+                scrollView.reflectScrolledClipView(clipView)
+            }
+            restoreViewport()
+            DispatchQueue.main.async(execute: restoreViewport)
         }
 
         func textDidChange(_ notification: Notification) {

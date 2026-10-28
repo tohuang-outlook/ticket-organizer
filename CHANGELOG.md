@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.8
+
+- Fix selected text size controls so they change the actual text formatting and support undo and redo.
+- Preserve different text sizes when reopening a saved note, and fix whole-note size shortcuts to apply font changes.
+
 ## 1.4.7
 
 - Replace the small A−/A+ size icons with labeled, bordered Smaller and Larger buttons for clearer, easier clicking.

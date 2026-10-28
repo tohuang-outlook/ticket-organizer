@@ -23,21 +23,15 @@ struct RichNoteEditor: NSViewRepresentable {
     var editable = true
 
     static func preferredFontSize(from richBody: Data?) -> Int {
-        guard let richBody,
-              let attributed = NSAttributedString(rtf: richBody, documentAttributes: nil),
+        guard let attributed = restoredBody(from: richBody),
               attributed.length > 0 else { return 16 }
         let font = attributed.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
         return min(48, max(10, Int((font?.pointSize ?? 16).rounded())))
     }
 
-    private func resized(_ attributed: NSAttributedString, to size: Int) -> NSAttributedString {
-        let result = NSMutableAttributedString(attributedString: attributed)
-        guard result.length > 0 else { return result }
-        result.enumerateAttribute(.font, in: NSRange(location: 0, length: result.length)) { value, range, _ in
-            let font = value as? NSFont ?? .systemFont(ofSize: CGFloat(size))
-            result.addAttribute(.font, value: NSFontManager.shared.convert(font, toSize: CGFloat(size)), range: range)
-        }
-        return result
+    static func restoredBody(from data: Data?) -> NSAttributedString? {
+        guard let data else { return nil }
+        return NSAttributedString(rtf: data, documentAttributes: nil)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -66,8 +60,8 @@ struct RichNoteEditor: NSViewRepresentable {
             coordinator?.adjustFontSize(by: step, in: editor)
         }
         context.coordinator.connectSizeController(sizeController, to: editor)
-        if let data = richBody, let attributed = NSAttributedString(rtf: data, documentAttributes: nil) {
-            editor.textStorage?.setAttributedString(resized(attributed, to: fontSize))
+        if let attributed = Self.restoredBody(from: richBody) {
+            editor.textStorage?.setAttributedString(attributed)
         } else {
             editor.string = text
         }
@@ -81,7 +75,7 @@ struct RichNoteEditor: NSViewRepresentable {
         context.coordinator.connectSizeController(sizeController, to: scroll.documentView as? BoldNoteTextView)
         guard context.coordinator.appliedFontSize != fontSize,
               let editor = scroll.documentView as? BoldNoteTextView else { return }
-        context.coordinator.applyFontSize(fontSize, to: editor, notifyChange: true)
+        context.coordinator.applyFontSize(fontSize, to: editor)
     }
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
@@ -107,10 +101,10 @@ struct RichNoteEditor: NSViewRepresentable {
             let size = min(48, max(10, parent.fontSize + step))
             guard size != parent.fontSize else { return }
             parent.fontSize = size
-            applyFontSize(size, to: editor, notifyChange: true)
+            applyFontSize(size, to: editor)
         }
 
-        func applyFontSize(_ size: Int, to editor: BoldNoteTextView, notifyChange: Bool) {
+        func applyFontSize(_ size: Int, to editor: BoldNoteTextView) {
             let selection = editor.selectedRange()
             let scrollView = editor.enclosingScrollView
             let clipView = scrollView?.contentView
@@ -121,10 +115,9 @@ struct RichNoteEditor: NSViewRepresentable {
                     let font = value as? NSFont ?? .systemFont(ofSize: CGFloat(size))
                     resized.addAttribute(.font, value: NSFontManager.shared.convert(font, toSize: CGFloat(size)), range: range)
                 }
-                editor.insertText(resized, replacementRange: NSRange(location: 0, length: storage.length))
+                guard editor.replaceRichText(resized, in: NSRange(location: 0, length: storage.length)) else { return }
                 editor.setSelectedRange(NSRange(location: min(selection.location, resized.length), length: min(selection.length, max(0, resized.length - selection.location))))
                 editor.undoManager?.setActionName("Change Note Font Size")
-                if notifyChange { editor.didChangeText() }
             }
             var attributes = editor.typingAttributes
             let font = attributes[.font] as? NSFont ?? .systemFont(ofSize: CGFloat(size))
@@ -157,11 +150,10 @@ struct RichNoteEditor: NSViewRepresentable {
                 let font = value as? NSFont ?? currentFont
                 resized.addAttribute(.font, value: NSFontManager.shared.convert(font, toSize: CGFloat(size)), range: subrange)
             }
-            editor.insertText(resized, replacementRange: range)
+            guard editor.replaceRichText(resized, in: range) else { return }
             editor.setSelectedRange(range)
             editor.undoManager?.setActionName("Change Selected Text Size")
-            editor.didChangeText()
-            sizeController?.updateSelectionFontSize(size)
+            refreshSelectionFontSize(in: editor)
             restoreViewport(of: editor, in: scrollView, to: scrollOrigin)
             Task { @MainActor [weak self, weak editor, weak scrollView] in
                 guard let self, let editor else { return }
@@ -203,12 +195,27 @@ struct RichNoteEditor: NSViewRepresentable {
             guard let editor = notification.object as? NSTextView else { return }
             parent.text = editor.string
             parent.richBody = editor.rtf(from: NSRange(location: 0, length: editor.textStorage?.length ?? 0))
+            refreshSelectionFontSize(in: editor)
         }
     }
 }
 
 final class BoldNoteTextView: NSTextView {
     var onFontSizeAdjustment: ((Int) -> Void)?
+
+    @discardableResult
+    func replaceRichText(_ replacement: NSAttributedString, in range: NSRange) -> Bool {
+        guard let storage = textStorage, NSMaxRange(range) <= storage.length,
+              shouldChangeText(in: range, replacementString: nil) else { return false }
+        let previous = storage.attributedSubstring(from: range)
+        undoManager?.registerUndo(withTarget: self) { target in
+            target.replaceRichText(previous, in: NSRange(location: range.location, length: replacement.length))
+        }
+        storage.replaceCharacters(in: range, with: replacement)
+        didChangeText()
+        setSelectedRange(NSRange(location: range.location, length: replacement.length))
+        return true
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if handleEditorShortcut(with: event) { return true }

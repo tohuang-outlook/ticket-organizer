@@ -1,8 +1,74 @@
 import XCTest
 import AppKit
+import SwiftUI
 @testable import TicketOrganizer
 
 final class RichTextTests: XCTestCase {
+    @MainActor
+    func testSelectedFontSizeChangesAccumulateAndSurviveRTF() throws {
+        var text = "first second"
+        var richBody: Data?
+        var fontSize = 16
+        let controller = NoteFontSizeController()
+        let parent = RichNoteEditor(
+            text: Binding(get: { text }, set: { text = $0 }),
+            richBody: Binding(get: { richBody }, set: { richBody = $0 }),
+            fontSize: Binding(get: { fontSize }, set: { fontSize = $0 }),
+            sizeController: controller
+        )
+        let coordinator = parent.makeCoordinator()
+        let editor = BoldNoteTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        editor.isRichText = true
+        editor.isEditable = true
+        editor.allowsUndo = true
+        let window = NSWindow(contentRect: editor.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        let scroll = NSScrollView(frame: editor.frame)
+        scroll.documentView = editor
+        window.contentView = scroll
+        editor.font = .systemFont(ofSize: 16)
+        editor.string = text
+        editor.textStorage?.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: 16), range: NSRange(location: 6, length: 6))
+        editor.delegate = coordinator
+        coordinator.connectSizeController(controller, to: editor)
+        editor.setSelectedRange(NSRange(location: 6, length: 6))
+
+        func size(at index: Int) throws -> CGFloat {
+            try XCTUnwrap(editor.textStorage?.attribute(.font, at: index, effectiveRange: nil) as? NSFont).pointSize
+        }
+
+        let undo = try XCTUnwrap(editor.undoManager)
+        undo.groupsByEvent = false
+        undo.beginUndoGrouping()
+        controller.adjustSelection(by: 2)
+        undo.endUndoGrouping()
+        XCTAssertEqual(try size(at: 0), 16)
+        XCTAssertEqual(try size(at: 6), 18)
+        XCTAssertEqual(controller.selectionFontSize, 18)
+        undo.undo()
+        XCTAssertEqual(try size(at: 6), 16)
+        XCTAssertEqual(controller.selectionFontSize, 16)
+        undo.redo()
+        XCTAssertEqual(try size(at: 6), 18)
+        XCTAssertEqual(controller.selectionFontSize, 18)
+        undo.beginUndoGrouping()
+        controller.adjustSelection(by: 2)
+        XCTAssertEqual(try size(at: 6), 20)
+        controller.adjustSelection(by: -2)
+        undo.endUndoGrouping()
+        XCTAssertEqual(try size(at: 6), 18)
+        let saved = try XCTUnwrap(richBody)
+        let reopened = try XCTUnwrap(RichNoteEditor.restoredBody(from: saved))
+        XCTAssertEqual((reopened.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize, 16)
+        let selectedFont = try XCTUnwrap(reopened.attribute(.font, at: 6, effectiveRange: nil) as? NSFont)
+        XCTAssertEqual(selectedFont.pointSize, 18)
+        XCTAssertTrue(NSFontManager.shared.traits(of: selectedFont).contains(.boldFontMask))
+        undo.beginUndoGrouping()
+        coordinator.adjustFontSize(by: 2, in: editor)
+        undo.endUndoGrouping()
+        XCTAssertEqual(try size(at: 0), 18)
+        XCTAssertTrue(NSFontManager.shared.traits(of: try XCTUnwrap(editor.textStorage?.attribute(.font, at: 6, effectiveRange: nil) as? NSFont)).contains(.boldFontMask))
+    }
+
     @MainActor
     func testCommandBBoldsOnlySelectionAndSurvivesRTFSave() async throws {
         let editor = BoldNoteTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))

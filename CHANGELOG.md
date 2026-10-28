@@ -1,5 +1,60 @@
 # Changelog
 
+## 1.4.4
+
+- Label the large ticket body editor as “Change, Backout, and Validation Plan” in new and edit windows.
+
+## 1.4.3
+
+- Warn when a new or edited ticket uses an RITM already present in the ticket list.
+- Show matching CHG, workflow, and title while allowing intentional duplicate RITMs to be saved.
+
+## 1.4.2
+
+- Allow editing a ticket's Created date and time in the ticket editor.
+- Validate the entered local date and time before saving; the updated timestamp is synced and affects list ordering.
+
+## 1.4.1
+
+- Widen the Ticket Number column so full RITM identifiers and important stars have more room.
+- Align the Ticket Number and CHG Number headers with their data columns.
+
+## 1.4.0
+
+- Add an Important ticket toggle to the editor without changing the ticket's workflow status.
+- Show marked tickets in the Important sidebar collection and allow dragging tickets there to mark them.
+- Preserve existing Important tickets and automatically mark them during data decoding.
+
+## 1.3.3
+
+- Replace the Examples workflow with Important and a filled star icon.
+- Preserve the existing saved workflow value so existing tickets stay in the renamed workflow.
+
+## 1.3.2
+
+- Increase CHG number contrast and weight while keeping RITM as the blue primary identifier.
+
+## 1.3.1
+
+- Show RITM identifiers in blue and CHG identifiers in neutral gray for clearer visual distinction.
+
+## 1.3.0
+
+- Rename All Notes to Open Notes and exclude Closed tickets from that list and count.
+- Add File menu commands to export a complete JSON backup and restore from a backup.
+- Save a separate, restorable safety backup before replacing tickets.
+- Restore ticket revisions through the existing local persistence and iCloud sync safeguards.
+
+## 1.2.9
+
+- Show the All Notes sidebar count for all tickets except Closed tickets.
+
+## 1.2.8
+
+- Add a Completed workflow between Approved and Examples.
+- Support moving tickets into Completed by dragging them to its sidebar row or selecting it in the editor.
+- Include Completed in workflow counts, filters, and persisted ticket status.
+
 ## 1.2.0
 
 - Add opt-in iCloud sync settings, status, automatic sync while running, and Sync Now.

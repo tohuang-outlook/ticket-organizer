@@ -5,12 +5,14 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 ## Daily use
 
 - Click once to select a ticket; double-click to open a movable, resizable editor.
-- The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt; CHG numbers are blue. Notes shows only the note title; the full body remains available in the editor and search.
+- The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt; RITM numbers are blue and bold, while CHG numbers use high-contrast primary text with medium weight. Notes shows only the note title; the full body remains available in the editor and search.
 - Sidebar labels and workflow counts use 18 pt.
-- Organize notes into Draft, Working, Pending Approval, Approved, Examples, and Closed.
+- Organize notes into Draft, Working, Pending Approval, Approved, Completed, Important, and Closed. Open Notes lists and counts all tickets except Closed. Mark an open ticket as Important in its editor without changing its workflow status; marked tickets also appear in the Important sidebar collection.
 - Drag a ticket onto a workflow in the sidebar to move it. The target highlights on hover; successful drops save immediately and open the destination list.
 - Type the Created date and time directly when adding a note (`yyyy-MM-dd HH:mm:ss`, local time), or click Now. Invalid dates cannot be saved.
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
+- Warn when an entered RITM already exists, with the matching CHG, status, and title. The warning does not block intentional duplicates.
+- Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
 - Working tickets can also be edited and saved with only RITM while their details are still incomplete.
 - The app opens Draft by default. New notes default to Draft with Low priority.
 - Tickets are ordered oldest-first on launch. Click Created to toggle between oldest-first and newest-first.
@@ -20,6 +22,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Press Command-S in the editor to save. Changes close the editor only after saving succeeds.
 - Quitting with unsaved ticket editors asks before discarding their changes.
 - Delete the selected ticket with Delete Selected Ticket or its context menu, then confirm.
+- Use File > Back Up Tickets to save a portable JSON snapshot. File > Restore Tickets from Backup replaces the current ticket list after confirmation; the current list is saved to a separate restorable safety backup first.
 
 New installations start with an empty list. Existing notes are preserved. Local-only use needs no account and sends no data. Optional iCloud sync uses your Apple Account's private CloudKit database. There is no telemetry.
 
@@ -40,15 +43,19 @@ The app always keeps local data on this Mac:
 
 The backup contains the previous successful save; it is replaced on the next successful change. The first save in 1.2 also keeps the original array in tickets.json.pre-icloud-backup. Include this folder in your normal Mac backups. For a manual backup, quit the app and copy the folder to another location. Version 1.2 uses a versioned archive containing notes, deletion tombstones, upload revisions, account binding, and recovered conflict versions; do not use an older app to edit this archive.
 
+File > Back Up Tickets creates a portable JSON snapshot containing ticket text, formatting, workflow, priorities, creation times, and sync metadata. These files contain sensitive ticket information; store them securely. Restore replaces the current ticket list, first saving a separate `TicketOrganizer-before-restore-*.json` safety snapshot in the Ticket Organizer Application Support folder. Close all ticket editors before restoring. On a Mac with iCloud sync enabled, restored changes reconcile with the same bound iCloud account; backups bound to a different account are rejected.
+
 To recover, quit the app, make a copy of both files, inspect the backup, and restore the desired copy as tickets.json. If the current file cannot be read, the app reports an error and blocks writes rather than replacing it. Save errors leave edited text open for retrying.
 
 Writes are locked across app instances. If another instance or external tool changes the data file, a stale instance blocks saving instead of overwriting it. Copy any unsaved text, quit all copies, and reopen the app. The adjacent .lock file contains no ticket data and does not need to be deleted.
 
-Update every Mac to 1.2.1 or newer before using Closed with iCloud. Older app versions cannot read that new workflow value and may pause rather than load the notes.
+Update every Mac to 1.2.8 or newer before using Completed with iCloud. Older app versions cannot read the Completed workflow value and may pause rather than load the notes. Update every Mac to 1.2.1 or newer before using Closed with iCloud, and to 1.2.2 or newer before using Working.
 
 Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
 
 Older versions did not record creation time. Their last-modified timestamp is used as the initial creation time and preserved on subsequent edits. The original creation time cannot be reconstructed.
+
+The Created date and time can be changed in either the new-ticket form or the ticket editor. Enter local time as `yyyy-MM-dd HH:mm:ss`; use Now to reset it to the current time. Changing this value also changes where the ticket appears in creation-time order.
 
 ## Develop and test
 
@@ -71,7 +78,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.2.7 BUILD_NUMBER=29 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.4 BUILD_NUMBER=40 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -118,13 +125,14 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.2.7)
+## Release acceptance gates (1.4.4)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 
 - Run all tests and build a universal archive; verify SHA256SUMS and the bundle signature.
-- On a disposable test account, verify selecting, double-click editing, bold/undo, manual Created input (including invalid dates), sorting, deletion confirmation, and moving between all six workflows. Confirm Working appears between Draft and Pending Approval. Reopen the app to check persistence.
+- On a disposable test account, verify selecting, double-click editing, bold/undo, manual Created input on creation and editing (including invalid dates), editing Created time then confirming the ticket re-sorts, duplicate RITM warnings on create and edit (including Closed matches), and intentional duplicate saves. Verify deletion confirmation, marking/unmarking Important without changing workflow status, and moving between workflows. Confirm Working appears between Draft and Pending Approval, Completed between Approved and Important, and Open Notes excludes Closed tickets. Verify backup export, restore confirmation, recovery of deleted/edited tickets, and pre-restore safety backup creation.
 - Confirm list and sidebar text are 18 pt. In the body editor, verify Command-period/Command-minus adjust all text by 2 pt, preserve bold, remain within 10–48 pt, and persist after saving and reopening.
+- Confirm full RITM identifiers fit beside the Important star and the table headers align with their columns. Confirm RITM is blue and bold, and CHG is high-contrast primary text with medium weight.
 - Verify unsaved edits trigger a warning on both editor close and Command-Q; Keep Editing must preserve the text.
 - Verify the packaged app on macOS 14 and on an Intel Mac; building both architectures is not the same as running on both.
 - Configure the real Apple Developer team, Production CloudKit schema, matching profile/certificate, and notarization credentials. Build with both REQUIRE_NOTARIZATION=1 and REQUIRE_ICLOUD=1. Require successful stapler validation and Gatekeeper assessment.

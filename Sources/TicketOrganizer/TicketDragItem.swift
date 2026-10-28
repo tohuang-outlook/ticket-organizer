@@ -27,7 +27,8 @@ struct WorkflowDropRow: View {
         case .working: "hammer"
         case .approval: "paperplane"
         case .approved: "checkmark.circle"
-        case .example: "star"
+        case .completed: "checkmark.seal"
+        case .important: "star.fill"
         case .closed: "archivebox"
         }
     }
@@ -38,7 +39,7 @@ struct WorkflowDropRow: View {
                 Image(systemName: icon).foregroundStyle(stage.color)
                 Text(stage.shortTitle).font(.system(size: 18))
                 Spacer()
-                Text("\(store.notes.filter { $0.stage == stage }.count)").font(.system(size: 18)).foregroundStyle(.secondary)
+                Text("\(ticketCount)").font(.system(size: 18)).foregroundStyle(.secondary)
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 4)
@@ -50,7 +51,7 @@ struct WorkflowDropRow: View {
         .overlay {
             if isTargeted { RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 2) }
         }
-        .help("Drag a ticket here to move it to \(stage.shortTitle).")
+        .help(stage == .important ? "Drag a ticket here to mark it important." : "Drag a ticket here to move it to \(stage.shortTitle).")
         .dropDestination(for: TicketDragItem.self) { items, _ in
             guard items.count == 1, let item = items.first else { return false }
             do {
@@ -63,5 +64,10 @@ struct WorkflowDropRow: View {
                 return false
             }
         } isTargeted: { isTargeted = $0 }
+    }
+
+    private var ticketCount: Int {
+        if stage == .important { TicketNote.importantTickets(store.notes).count }
+        else { store.notes.filter { $0.stage == stage }.count }
     }
 }

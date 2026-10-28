@@ -65,13 +65,13 @@ final class TicketStore: ObservableObject {
         try commit(next, localChange: true)
     }
 
-    func update(_ note: TicketNote, originalStage: TicketStage? = nil) throws {
+    func update(_ note: TicketNote, originalStage: TicketStage? = nil, originalIsImportant: Bool? = nil) throws {
         guard var record = archive.records[note.id.uuidString], let current = record.note else { throw StoreError.missingTicket }
         // Prevent a stale open editor from overwriting changes received from another Mac.
         guard note.updatedAt == current.updatedAt || note == current else { throw StoreError.staleEditor }
         var edited = note
         if let originalStage, note.stage == originalStage { edited.stage = current.stage }
-        edited.createdAt = current.createdAt
+        if let originalIsImportant, note.isImportant == originalIsImportant { edited.isImportant = current.isImportant }
         edited.updatedAt = max(Date(), current.updatedAt.addingTimeInterval(0.001))
         record.change(to: edited)
         var next = archive
@@ -81,8 +81,13 @@ final class TicketStore: ObservableObject {
 
     func moveTicket(id: UUID, to stage: TicketStage) throws {
         guard var record = archive.records[id.uuidString], var note = record.note else { throw StoreError.missingTicket }
-        guard note.stage != stage else { return }
-        note.stage = stage
+        if stage == .important {
+            guard !note.isImportant else { return }
+            note.isImportant = true
+        } else {
+            guard note.stage != stage else { return }
+            note.stage = stage
+        }
         // Keep editor revision timestamps stable for local workflow-only moves.
         record.change(to: note)
         var next = archive
@@ -96,6 +101,66 @@ final class TicketStore: ObservableObject {
         var next = archive
         next.records[note.id.uuidString] = record
         try commit(next, localChange: true)
+    }
+
+    func exportBackup(to destination: URL) throws {
+        guard canWrite else { throw StoreError.unreadableFile }
+        let protectedFiles = [url, url.appendingPathExtension("backup"), url.appendingPathExtension("pre-icloud-backup")]
+        guard !protectedFiles.contains(where: { $0.standardizedFileURL == destination.standardizedFileURL }) else {
+            throw StoreError.backupDestinationProtected
+        }
+        let currentData = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
+        guard currentData == lastSavedData else { throw StoreError.concurrentChange }
+        let document = TicketBackupDocument(archive: archive)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(document)
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: destination, options: .atomic)
+    }
+
+    @discardableResult
+    func restoreBackup(from source: URL) throws -> URL {
+        let backup = try TicketBackupDocument.decode(Data(contentsOf: source))
+        if let currentAccount = archive.cloudAccountID, currentAccount != backup.archive.cloudAccountID {
+            throw StoreError.backupAccountMismatch
+        }
+
+        // Keep a restorable pre-restore snapshot before changing the working archive.
+        let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let safetyCopy = url.deletingLastPathComponent().appendingPathComponent("TicketOrganizer-before-restore-\(timestamp)-\(UUID().uuidString).json")
+        try exportBackup(to: safetyCopy)
+
+        // Convert the imported snapshot into new local revisions so active iCloud sync can
+        // converge toward the restored snapshot. A tombstoned ID gets a new ID to preserve
+        // the store's delete-wins rule and prevent deleted tickets from being resurrected.
+        var next = archive
+        if next.records.isEmpty && next.cloudAccountID == nil {
+            next.cloudAccountID = backup.archive.cloudAccountID
+            next.syncEnabled = backup.archive.syncEnabled
+        }
+        let backupNotes = backup.archive.notes
+        let backupIDs = Set(backupNotes.map(\.id))
+        for key in Array(next.records.keys) {
+            guard var record = next.records[key], let note = record.note,
+                  !backupIDs.contains(note.id) else { continue }
+            record.change(to: nil)
+            next.records[key] = record
+        }
+        for var note in backupNotes {
+            if var current = next.records[note.id.uuidString], let existingNote = current.note {
+                if existingNote == note { continue }
+                note.updatedAt = max(Date(), existingNote.updatedAt.addingTimeInterval(0.001))
+                current.change(to: note)
+                next.records[note.id.uuidString] = current
+            } else {
+                if next.records[note.id.uuidString] != nil { note.id = UUID() }
+                note.updatedAt = max(Date(), note.updatedAt)
+                next.records[note.id.uuidString] = TicketSyncRecord(note: note)
+            }
+        }
+        try commit(next, localChange: true)
+        return safetyCopy
     }
 
     func setSyncEnabled(_ enabled: Bool) throws {
@@ -144,7 +209,7 @@ final class TicketStore: ObservableObject {
     }
 
     enum StoreError: LocalizedError {
-        case unreadableFile, missingTicket, duplicateTicket, differentAccount, staleEditor, concurrentChange
+        case unreadableFile, missingTicket, duplicateTicket, differentAccount, staleEditor, concurrentChange, backupAccountMismatch, backupDestinationProtected
         var errorDescription: String? {
             switch self {
             case .unreadableFile: "Notes cannot be saved because the existing data file could not be opened. Restore your data file, then restart the app."
@@ -153,6 +218,8 @@ final class TicketStore: ObservableObject {
             case .differentAccount: "Sync is paused because this Mac is using a different iCloud account. Sign in to the original account to resume. Your local notes have been kept."
             case .staleEditor: "This ticket changed since you opened it. Copy any unsaved text, close the editor, and reopen the ticket to see the latest version."
             case .concurrentChange: "The notes file changed outside this app or is being saved by another instance. Nothing was overwritten. Copy any unsaved text, quit all copies of Ticket Organizer, and reopen the latest version."
+            case .backupAccountMismatch: "This backup is linked to a different iCloud account than this Mac. No tickets were changed. Sign in to the matching account or use a backup from this account."
+            case .backupDestinationProtected: "Choose a different backup location. Ticket Organizer will not overwrite its live data or automatic backups."
             }
         }
     }

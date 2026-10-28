@@ -1,6 +1,7 @@
 import SwiftUI
 import Foundation
 import AppKit
+import UniformTypeIdentifiers
 
 @main
 struct TicketOrganizerApp: App {
@@ -10,22 +11,37 @@ struct TicketOrganizerApp: App {
         WindowGroup("Ticket Organizer") { ContentView(store: store).environment(\.locale, Locale(identifier: "en")) }
             .windowStyle(.titleBar)
             .defaultSize(width: 1180, height: 760)
-            .commands { CommandGroup(after: .newItem) { Button("New Ticket Note") { NotificationCenter.default.post(name: .newTicket, object: nil) }.keyboardShortcut("n") } }
+            .commands {
+                CommandGroup(after: .newItem) {
+                    Button("New Ticket Note") { NotificationCenter.default.post(name: .newTicket, object: nil) }
+                        .keyboardShortcut("n")
+                }
+                CommandGroup(replacing: .importExport) {
+                    Button("Back Up Tickets…") { NotificationCenter.default.post(name: .backupTickets, object: nil) }
+                    Button("Restore Tickets from Backup…") { NotificationCenter.default.post(name: .restoreTickets, object: nil) }
+                }
+            }
         Settings {
             CloudSyncSettingsView(store: store, sync: store.cloudSync).environment(\.locale, Locale(identifier: "en"))
         }
     }
 }
 
-extension Notification.Name { static let newTicket = Notification.Name("newTicket") }
+extension Notification.Name {
+    static let newTicket = Notification.Name("newTicket")
+    static let backupTickets = Notification.Name("backupTickets")
+    static let restoreTickets = Notification.Name("restoreTickets")
+}
 
 enum TicketStage: String, Codable, CaseIterable, Identifiable {
-    case draft, working, approval, approved, example, closed
+    case draft, working, approval, approved, completed
+    case important = "example" // Keep the persisted value so existing tickets migrate without rewriting data.
+    case closed
     var id: String { rawValue }
     var allowsIncompleteDetails: Bool { self == .draft || self == .working }
-    var title: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "UCSF ticket send for approve"; case .approved: "Approved"; case .example: "UCSF ticket example"; case .closed: "Closed" } }
-    var shortTitle: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "Pending Approval"; case .approved: "Approved"; case .example: "Examples"; case .closed: "Closed" } }
-    var color: Color { switch self { case .draft: .secondary; case .working: .blue; case .approval: .orange; case .approved: .green; case .example: .purple; case .closed: .gray } }
+    var title: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "UCSF ticket send for approve"; case .approved: "Approved"; case .completed: "Completed"; case .important: "Important"; case .closed: "Closed" } }
+    var shortTitle: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "Pending Approval"; case .approved: "Approved"; case .completed: "Completed"; case .important: "Important"; case .closed: "Closed" } }
+    var color: Color { switch self { case .draft: .secondary; case .working: .blue; case .approval: .orange; case .approved: .green; case .completed: .mint; case .important: .purple; case .closed: .gray } }
 }
 
 enum Priority: String, Codable, CaseIterable, Identifiable {
@@ -42,6 +58,7 @@ struct TicketNote: Identifiable, Codable, Hashable {
     var title: String
     var body: String
     var stage: TicketStage
+    var isImportant = false
     var priority: Priority
     var owner: String
     var updatedAt = Date()
@@ -50,6 +67,14 @@ struct TicketNote: Identifiable, Codable, Hashable {
 }
 
 extension TicketNote {
+    static func excludingClosed(_ notes: [TicketNote]) -> [TicketNote] {
+        notes.filter { $0.stage != .closed }
+    }
+
+    static func importantTickets(_ notes: [TicketNote]) -> [TicketNote] {
+        notes.filter { $0.isImportant || $0.stage == .important }
+    }
+
     static func sortedByCreation(_ notes: [TicketNote], newestFirst: Bool) -> [TicketNote] {
         notes.sorted {
             if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
@@ -58,7 +83,7 @@ extension TicketNote {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, ritm, chg, title, body, stage, priority, owner, updatedAt, richBody, createdAt
+        case id, ritm, chg, title, body, stage, isImportant, priority, owner, updatedAt, richBody, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -68,7 +93,9 @@ extension TicketNote {
         chg = try values.decode(String.self, forKey: .chg)
         title = try values.decode(String.self, forKey: .title)
         body = try values.decode(String.self, forKey: .body)
-        stage = try values.decode(TicketStage.self, forKey: .stage)
+        let storedStage = try values.decode(TicketStage.self, forKey: .stage)
+        stage = storedStage
+        isImportant = (try values.decodeIfPresent(Bool.self, forKey: .isImportant) ?? false) || storedStage == .important
         priority = try values.decode(Priority.self, forKey: .priority)
         owner = try values.decodeIfPresent(String.self, forKey: .owner) ?? ""
         updatedAt = try values.decode(Date.self, forKey: .updatedAt)
@@ -96,15 +123,26 @@ struct ContentView: View {
     @State private var priority: Priority? = nil
     @State private var newestFirst = false
     private var filtered: [TicketNote] {
-        TicketNote.sortedByCreation(store.notes.filter { (selection == nil || $0.stage == selection) && (priority == nil || $0.priority == priority) && (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query)) }, newestFirst: newestFirst)
+        let stageNotes: [TicketNote]
+        if let selection {
+            stageNotes = selection == .important
+                ? TicketNote.importantTickets(store.notes)
+                : store.notes.filter { $0.stage == selection }
+        } else {
+            stageNotes = TicketNote.excludingClosed(store.notes)
+        }
+        return TicketNote.sortedByCreation(stageNotes.filter {
+            (priority == nil || $0.priority == priority) &&
+                (query.isEmpty || "\($0.ritm) \($0.chg) \($0.title) \($0.body)".localizedCaseInsensitiveContains(query))
+        }, newestFirst: newestFirst)
     }
     private var selectedTicket: TicketNote? { filtered.first { $0.id == selectedID } }
 
     private func openTicket(_ id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }) else { return }
         selectedID = id
-        TicketEditorWindows.shared.open(note: note) { updated in
-            try store.update(updated, originalStage: note.stage)
+        TicketEditorWindows.shared.open(note: note, existingNotes: store.notes) { updated in
+            try store.update(updated, originalStage: note.stage, originalIsImportant: note.isImportant)
         }
     }
 
@@ -119,7 +157,7 @@ struct ContentView: View {
         } detail: {
             VStack(spacing: 0) {
                 HStack { Spacer(); CloudSyncStatusView(sync: store.cloudSync) }.padding(.horizontal, 28).padding(.top, 12)
-                HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "All Ticket Notes").font(.system(size: 48, weight: .bold)); Text("Keep RITM, CHG, and implementation notes together. Send them for approval when ready.").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("New Note", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
+                HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "Open Notes").font(.system(size: 48, weight: .bold)); Text("Keep RITM, CHG, and implementation notes together. Send them for approval when ready.").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("New Note", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
                 Divider()
                 HStack { TextField("Search RITM, CHG, or notes", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("Priority", selection: $priority) { Text("All Priorities").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) notes").foregroundStyle(.secondary).font(.caption)
                     Button(role: .destructive) {
@@ -148,7 +186,7 @@ struct ContentView: View {
                 } primaryAction: { ids in
                     if let id = ids.first { openTicket(id) }
                 }
-            }.sheet(isPresented: $showNew) { NewTicketView { try store.add($0); selection = .draft; selectedID = $0.id } }
+            }.sheet(isPresented: $showNew) { NewTicketView(existingNotes: store.notes) { try store.add($0); selection = .draft; selectedID = $0.id } }
         }
         .alert("Delete this ticket?", isPresented: $showDeleteConfirmation, presenting: ticketToDelete) { note in
             Button("Cancel", role: .cancel) { ticketToDelete = nil }
@@ -167,6 +205,8 @@ struct ContentView: View {
             if let id = selectedID, !ids.contains(id) { selectedID = nil }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTicket)) { _ in showNew = true }
+        .onReceive(NotificationCenter.default.publisher(for: .backupTickets)) { _ in exportBackup() }
+        .onReceive(NotificationCenter.default.publisher(for: .restoreTickets)) { _ in restoreBackup() }
         .task { store.cloudSync.start() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await store.cloudSync.syncNow() }
@@ -174,6 +214,56 @@ struct ContentView: View {
         .alert("Unable to Access Notes", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
+    }
+
+    private func exportBackup() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "Ticket Organizer Backup \(Date.now.formatted(.iso8601.year().month().day())).json"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        do {
+            try store.exportBackup(to: destination)
+            showBackupAlert(title: "Backup Saved", message: "Saved \(store.notes.count) tickets to:\n\(destination.path)")
+        } catch {
+            store.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreBackup() {
+        guard !TicketEditorWindows.shared.hasOpenEditors else {
+            showBackupAlert(title: "Close Ticket Editors First", message: "Close all open ticket editor windows before restoring a backup, so unsaved edits cannot overwrite the restored tickets.")
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let source = panel.url else { return }
+        do {
+            let document = try TicketBackupDocument.decode(Data(contentsOf: source))
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Restore Tickets from Backup?"
+            alert.informativeText = "This replaces the current ticket list with the \(document.archive.notes.count) tickets in this backup. A separate safety backup of the current data will be saved automatically before restoring. If iCloud sync is enabled, the restored tickets will sync and reconcile with that account."
+            alert.addButton(withTitle: "Restore Backup")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            let safetyCopy = try store.restoreBackup(from: source)
+            selectedID = nil
+            selection = nil
+            showBackupAlert(title: "Backup Restored", message: "Restored \(document.archive.notes.count) tickets. The previous data is saved here:\n\(safetyCopy.path)")
+        } catch {
+            store.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func showBackupAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 
@@ -183,14 +273,26 @@ struct Sidebar: View {
     @Binding var showNew: Bool
     var onMoved: (UUID) -> Void
 
+    private var allNotesCountExcludingClosed: Int {
+        TicketNote.excludingClosed(store.notes).count
+    }
+
     var body: some View {
         List {
             Section {
                 Button { selection = nil } label: {
-                    Label("All Notes", systemImage: "tray.full").font(.system(size: 18))
+                    HStack {
+                        Label("Open Notes", systemImage: "tray.full")
+                            .font(.system(size: 18))
+                        Spacer()
+                        Text("\(allNotesCountExcludingClosed)")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(selection == nil ? .primary : .secondary)
+                .help("Open Notes excludes tickets in Closed.")
             } header: {
                 Text("Ticket Notes").font(.system(size: 18, weight: .semibold))
             }
@@ -213,8 +315,8 @@ struct TableHeader: View {
     @Binding var newestFirst: Bool
     var body: some View {
         HStack {
-            Text("Ticket Number").frame(width: 140, alignment: .leading)
-            Text("CHG Number").frame(width: 125, alignment: .leading)
+            Text("Ticket Number").frame(width: 180, alignment: .leading)
+            Text("CHG Number").frame(width: 135, alignment: .leading)
             Button { newestFirst.toggle() } label: {
                 HStack(spacing: 5) { Text("Created"); Image(systemName: newestFirst ? "chevron.down" : "chevron.up") }
             }
@@ -233,8 +335,13 @@ struct NoteRow: View {
     let note: TicketNote
     var body: some View {
         HStack {
-            Text(note.ritm).font(.system(size: 18, design: .monospaced)).bold().lineLimit(1).help(note.ritm).frame(width: 150, alignment: .leading)
-            Text(note.chg).font(.system(size: 18, design: .monospaced)).foregroundStyle(.blue).lineLimit(1).help(note.chg).frame(width: 135, alignment: .leading)
+            HStack(spacing: 5) {
+                Text(note.ritm).font(.system(size: 18, design: .monospaced)).bold().foregroundStyle(.blue).lineLimit(1).help(note.ritm)
+                if note.isImportant {
+                    Image(systemName: "star.fill").foregroundStyle(.purple).help("Important ticket")
+                }
+            }.frame(width: 180, alignment: .leading)
+            Text(note.chg).font(.system(size: 18, weight: .medium, design: .monospaced)).foregroundStyle(.primary).lineLimit(1).help(note.chg).frame(width: 135, alignment: .leading)
             Text(createdDateFormatter.string(from: note.createdAt)).monospacedDigit().lineLimit(1).frame(width: 190, alignment: .leading)
             Text(note.stage.shortTitle).foregroundStyle(note.stage.color).padding(.horizontal, 8).padding(.vertical, 4).background(note.stage.color.opacity(0.12)).clipShape(Capsule()).frame(width: 135, alignment: .leading)
             Text(note.priority.title).foregroundStyle(note.priority.color).frame(width: 75, alignment: .leading)
@@ -243,15 +350,50 @@ struct NoteRow: View {
     }
 }
 
+private func duplicateRITMMatches(_ ritm: String, among notes: [TicketNote], excluding id: UUID? = nil) -> [TicketNote] {
+    let key = ritm.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !key.isEmpty else { return [] }
+    return notes.filter {
+        $0.id != id && $0.ritm.trimmingCharacters(in: .whitespacesAndNewlines).localizedCaseInsensitiveCompare(key) == .orderedSame
+    }.sorted { $0.createdAt < $1.createdAt }
+}
+
+private struct DuplicateRITMWarning: View {
+    let matches: [TicketNote]
+
+    var body: some View {
+        if !matches.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("This RITM already exists", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                ForEach(matches) { note in
+                    Text("\(note.ritm) · \(note.chg.isEmpty ? "No CHG" : note.chg) · \(note.stage.shortTitle) · \(note.title.isEmpty ? "Untitled" : note.title)")
+                        .font(.caption)
+                        .lineLimit(2)
+                }
+                Text("You can still save if this is intentional.")
+                    .font(.caption)
+            }
+            .foregroundStyle(.orange)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
 
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
+    let existingNotes: [TicketNote]
     var onSave: (TicketNote) throws -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
     @State private var bodyFontSize = 16
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
+    private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes) }
 
     private func saveNote() {
         guard let createdAt = CreatedTimeInput.parse(createdTimeText) else {
@@ -269,6 +411,7 @@ struct NewTicketView: View {
             Text("Only RITM is required to save a draft. CHG, title, and notes can be added later.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
+            DuplicateRITMWarning(matches: duplicateMatches)
             TextField("Note title", text: $title)
             LabeledContent("Created") {
                 TextField("yyyy-MM-dd HH:mm:ss", text: $createdTimeText)
@@ -278,6 +421,8 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
+            Text("Change, Backout, and Validation Plan")
+                .font(.headline)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 580)
@@ -289,33 +434,44 @@ struct EditTicketView: View {
     var onClose: () -> Void
     var onDirtyChange: (Bool) -> Void
     let original: TicketNote
+    let existingNotes: [TicketNote]
     var onSave: (TicketNote) throws -> Void
     @State private var ritm: String
     @State private var chg: String
     @State private var title: String
     @State private var bodyText: String
     @State private var stage: TicketStage
+    @State private var isImportant: Bool
     @State private var priority: Priority
     @State private var richBody: Data?
     @State private var bodyFontSize: Int
+    @State private var createdTimeText: String
     @State private var saveError: String?
 
-    init(note: TicketNote, onClose: @escaping () -> Void, onDirtyChange: @escaping (Bool) -> Void, onSave: @escaping (TicketNote) throws -> Void) {
-        original = note; self.onClose = onClose; self.onDirtyChange = onDirtyChange; self.onSave = onSave
+    init(note: TicketNote, existingNotes: [TicketNote], onClose: @escaping () -> Void, onDirtyChange: @escaping (Bool) -> Void, onSave: @escaping (TicketNote) throws -> Void) {
+        original = note; self.existingNotes = existingNotes; self.onClose = onClose; self.onDirtyChange = onDirtyChange; self.onSave = onSave
         _ritm = State(initialValue: note.ritm); _chg = State(initialValue: note.chg); _title = State(initialValue: note.title)
-        _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
+        _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _isImportant = State(initialValue: note.isImportant); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
         _bodyFontSize = State(initialValue: RichNoteEditor.preferredFontSize(from: note.richBody))
+        _createdTimeText = State(initialValue: CreatedTimeInput.format(note.createdAt))
     }
+    private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes, excluding: original.id) }
 
     private func saveNote() {
+        guard let createdAt = CreatedTimeInput.parse(createdTimeText) else {
+            saveError = "Enter a valid Created date and time using yyyy-MM-dd HH:mm:ss."
+            return
+        }
         var updated = original
         updated.ritm = ritm.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.chg = chg.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.body = bodyText
         updated.stage = stage
+        updated.isImportant = isImportant
         updated.priority = priority
         updated.richBody = richBody
+        updated.createdAt = createdAt
         do { try onSave(updated); onClose() }
         catch { saveError = error.localizedDescription }
     }
@@ -324,12 +480,41 @@ struct EditTicketView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Edit Ticket Note").font(.title2.bold())
             HStack { LabeledContent("RITM") { TextField("RITM0767540", text: $ritm) }; LabeledContent("CHG") { TextField("CHG0197325", text: $chg) } }
+            DuplicateRITMWarning(matches: duplicateMatches)
             TextField("Note title", text: $title)
+            HStack {
+                LabeledContent("Created") {
+                    TextField("yyyy-MM-dd HH:mm:ss", text: $createdTimeText)
+                        .monospacedDigit()
+                        .accessibilityLabel("Created date and time")
+                    Button("Now") { createdTimeText = CreatedTimeInput.format(Date()) }
+                }
+                Text("Local time")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Text("Change, Backout, and Validation Plan")
+                .font(.headline)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
-            HStack { Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }; Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Spacer(); Text("⌘B Bold · ⌘. Larger · ⌘- Smaller · \(bodyFontSize) pt").font(.caption).foregroundStyle(.secondary) }
+            HStack {
+                Picker("Status", selection: $stage) { ForEach(TicketStage.allCases) { Text($0.title).tag($0) } }
+                Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }
+                Toggle(isOn: $isImportant) { Label("Important ticket", systemImage: isImportant ? "star.fill" : "star") }
+                    .toggleStyle(.checkbox)
+                    .help("Mark this ticket as important without changing its workflow status.")
+                Spacer()
+                Text("⌘B Bold · ⌘. Larger · ⌘- Smaller · \(bodyFontSize) pt").font(.caption).foregroundStyle(.secondary)
+            }
             HStack { Spacer(); Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save Changes", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (!stage.allowsIncompleteDetails && [chg, title].contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })) }
         }.padding(24).frame(minWidth: 720, minHeight: 480)
-        .onChange(of: [ritm, chg, title, bodyText, stage.rawValue, priority.rawValue]) { _, _ in onDirtyChange(true) }
+        .onChange(of: [ritm, chg, title, bodyText, stage.rawValue, priority.rawValue, createdTimeText]) { _, _ in onDirtyChange(true) }
+        .onChange(of: isImportant) { _, value in
+            if !value && stage == .important { stage = .draft }
+            onDirtyChange(true)
+        }
+        .onChange(of: stage) { _, value in
+            if value == .important { isImportant = true }
+            onDirtyChange(true)
+        }
         .onChange(of: richBody) { _, _ in onDirtyChange(true) }
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
@@ -339,12 +524,13 @@ struct EditTicketView: View {
 final class TicketEditorWindows: NSObject, NSWindowDelegate {
     static let shared = TicketEditorWindows()
     private var windows: [UUID: NSWindow] = [:]
+    var hasOpenEditors: Bool { !windows.isEmpty }
 
     func close(_ id: UUID) {
         windows[id]?.close()
     }
 
-    func open(note: TicketNote, onSave: @escaping (TicketNote) throws -> Void) {
+    func open(note: TicketNote, existingNotes: [TicketNote], onSave: @escaping (TicketNote) throws -> Void) {
         if let existing = windows[note.id] {
             existing.makeKeyAndOrderFront(nil)
             return
@@ -353,7 +539,7 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
         window.title = "\(note.ritm) · \(note.chg) — Edit Note"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentView = NSHostingView(rootView: EditTicketView(note: note, onClose: { [weak window] in window?.performClose(nil) }, onDirtyChange: { [weak window] dirty in window?.isDocumentEdited = dirty }, onSave: { [weak window] updated in
+        window.contentView = NSHostingView(rootView: EditTicketView(note: note, existingNotes: existingNotes, onClose: { [weak window] in window?.performClose(nil) }, onDirtyChange: { [weak window] dirty in window?.isDocumentEdited = dirty }, onSave: { [weak window] updated in
             try onSave(updated)
             window?.isDocumentEdited = false
         }).environment(\.locale, Locale(identifier: "en")))

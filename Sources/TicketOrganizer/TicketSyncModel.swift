@@ -114,3 +114,40 @@ struct TicketArchive: Codable {
         var errorDescription: String? { "The notes file uses an unsupported format or contains invalid records. It has not been changed." }
     }
 }
+
+struct TicketBackupDocument: Codable {
+    static let currentFormat = "com.tohuang.ticket-organizer.backup"
+    static let currentVersion = 1
+
+    let format: String
+    let version: Int
+    let exportedAt: Date
+    let archive: TicketArchive
+
+    init(archive: TicketArchive, exportedAt: Date = Date()) {
+        self.format = Self.currentFormat
+        self.version = Self.currentVersion
+        self.exportedAt = exportedAt
+        self.archive = archive
+    }
+
+    static func decode(_ data: Data) throws -> TicketBackupDocument {
+        let document = try JSONDecoder().decode(TicketBackupDocument.self, from: data)
+        guard document.format == currentFormat,
+              document.version == currentVersion,
+              document.archive.schemaVersion == 2,
+              document.archive.records.allSatisfy({ key, record in
+                  key == record.id.uuidString && (record.note == nil || record.note?.id == record.id)
+              }) else { throw BackupError.invalidBackup }
+        return document
+    }
+
+    enum BackupError: LocalizedError {
+        case invalidBackup
+        var errorDescription: String? {
+            switch self {
+            case .invalidBackup: "This is not a supported Ticket Organizer backup. No tickets were changed."
+            }
+        }
+    }
+}

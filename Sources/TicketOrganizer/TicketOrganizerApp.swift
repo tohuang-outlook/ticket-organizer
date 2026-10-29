@@ -406,6 +406,19 @@ private struct SelectionFontSizeControl: View {
     }
 }
 
+private struct PlanEditorHeading: View {
+    @ObservedObject var controller: NoteFontSizeController
+
+    var body: some View {
+        HStack {
+            Text("Change, Backout, and Validation Plan").font(.headline)
+            Spacer()
+            Button { controller.toggleItalic() } label: { Text("I").italic().bold() }
+                .help("Italic (⌘I)")
+                .accessibilityLabel("Toggle italic")
+        }
+    }
+}
 
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
@@ -445,8 +458,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
-            Text("Change, Backout, and Validation Plan")
-                .font(.headline)
+            PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 580)
@@ -520,13 +532,12 @@ struct EditTicketView: View {
                 Text("Local time")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Text("Change, Backout, and Validation Plan")
-                .font(.headline)
+            PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack {
                 SelectionFontSizeControl(controller: fontSizeController)
                 Spacer()
-                Text("⌘B Bold · ⌘. / ⌘+ Larger · ⌘- Smaller")
+                Text("⌘B Bold · ⌘I Italic · ⌘. / ⌘+ Larger · ⌘- Smaller")
                     .font(.caption).foregroundStyle(.secondary)
             }
             HStack {

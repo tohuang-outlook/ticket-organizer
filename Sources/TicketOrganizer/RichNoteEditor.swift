@@ -5,10 +5,13 @@ import AppKit
 final class NoteFontSizeController: ObservableObject {
     @Published private(set) var selectionFontSize: Int?
     fileprivate var onAdjustSelection: ((Int) -> Void)?
+    fileprivate var onToggleItalic: (() -> Void)?
 
     func adjustSelection(by step: Int) {
         onAdjustSelection?(step)
     }
+
+    func toggleItalic() { onToggleItalic?() }
 
     fileprivate func updateSelectionFontSize(_ size: Int?) {
         selectionFontSize = size.map { min(48, max(10, $0)) }
@@ -80,6 +83,7 @@ struct RichNoteEditor: NSViewRepresentable {
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
         coordinator.sizeController?.onAdjustSelection = nil
+        coordinator.sizeController?.onToggleItalic = nil
     }
 
     @MainActor
@@ -94,6 +98,11 @@ struct RichNoteEditor: NSViewRepresentable {
             controller?.onAdjustSelection = { [weak self, weak editor] step in
                 guard let self, let editor else { return }
                 self.adjustSelectedFontSize(by: step, in: editor)
+            }
+            controller?.onToggleItalic = { [weak editor] in
+                guard let editor else { return }
+                editor.toggleItalic()
+                editor.window?.makeFirstResponder(editor)
             }
         }
 
@@ -234,7 +243,11 @@ final class BoldNoteTextView: NSTextView {
 
         let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
         if key == "b" {
-            toggleSelectionBold()
+            toggleFontTrait(.boldFontMask, actionName: "Toggle Bold")
+            return true
+        }
+        if key == "i" {
+            toggleItalic()
             return true
         }
         if key == "." || event.keyCode == 47 {
@@ -252,29 +265,30 @@ final class BoldNoteTextView: NSTextView {
         return false
     }
 
-    private func toggleSelectionBold() {
+    func toggleItalic() { toggleFontTrait(.italicFontMask, actionName: "Toggle Italic") }
+
+    private func toggleFontTrait(_ trait: NSFontTraitMask, actionName: String) {
         let range = selectedRange()
         let manager = NSFontManager.shared
         if range.length == 0 {
             let font = typingAttributes[.font] as? NSFont ?? .systemFont(ofSize: 16)
-            let bold = manager.traits(of: font).contains(.boldFontMask)
-            typingAttributes[.font] = bold ? manager.convert(font, toNotHaveTrait: .boldFontMask) : manager.convert(font, toHaveTrait: .boldFontMask)
+            let hasTrait = manager.traits(of: font).contains(trait)
+            typingAttributes[.font] = hasTrait ? manager.convert(font, toNotHaveTrait: trait) : manager.convert(font, toHaveTrait: trait)
             return
         }
         guard let storage = textStorage else { return }
         let replacement = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         let fullRange = NSRange(location: 0, length: replacement.length)
-        var allBold = true
+        var allHaveTrait = true
         replacement.enumerateAttribute(.font, in: fullRange) { value, _, _ in
-            if !manager.traits(of: value as? NSFont ?? .systemFont(ofSize: 16)).contains(.boldFontMask) { allBold = false }
+            if !manager.traits(of: value as? NSFont ?? .systemFont(ofSize: 16)).contains(trait) { allHaveTrait = false }
         }
         replacement.enumerateAttribute(.font, in: fullRange) { value, subrange, _ in
             let font = value as? NSFont ?? .systemFont(ofSize: 16)
-            let converted = allBold ? manager.convert(font, toNotHaveTrait: .boldFontMask) : manager.convert(font, toHaveTrait: .boldFontMask)
+            let converted = allHaveTrait ? manager.convert(font, toNotHaveTrait: trait) : manager.convert(font, toHaveTrait: trait)
             replacement.addAttribute(.font, value: converted, range: subrange)
         }
-        insertText(replacement, replacementRange: range)
-        setSelectedRange(range)
-        undoManager?.setActionName("Toggle Bold")
+        guard replaceRichText(replacement, in: range) else { return }
+        undoManager?.setActionName(actionName)
     }
 }

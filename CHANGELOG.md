@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.10
+
+- Add an italic button and Command-I shortcut to the plan editor, including support for bold italic text.
+
 ## 1.4.9
 
 - Set the RITM, CHG, and note title input text in the ticket editor to 18 pt.

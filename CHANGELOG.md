@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.12
+
+- Add a gray text color button to the plan editor.
+
 ## 1.4.11
 
 - Add red and default text color buttons to the plan editor for selected text or new typing.

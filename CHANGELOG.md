@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.13
+
+- Rename the pending approval page title to "Pending Approval".
+
 ## 1.4.12
 
 - Add a gray text color button to the plan editor.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.11
+
+- Add red and default text color buttons to the plan editor for selected text or new typing.
+
 ## 1.4.10
 
 - Add an italic button and Command-I shortcut to the plan editor, including support for bold italic text.

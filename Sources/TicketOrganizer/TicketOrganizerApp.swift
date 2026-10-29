@@ -416,6 +416,13 @@ private struct PlanEditorHeading: View {
             Button { controller.toggleItalic() } label: { Text("I").italic().bold() }
                 .help("Italic (⌘I)")
                 .accessibilityLabel("Toggle italic")
+            Button("Red") { controller.setTextColor(.red) }
+                .foregroundStyle(.red)
+                .help("Make selected text red")
+                .accessibilityLabel("Make text red")
+            Button("Default") { controller.setTextColor(.textColor) }
+                .help("Restore the default text color")
+                .accessibilityLabel("Restore default text color")
         }
     }
 }

@@ -6,12 +6,14 @@ final class NoteFontSizeController: ObservableObject {
     @Published private(set) var selectionFontSize: Int?
     fileprivate var onAdjustSelection: ((Int) -> Void)?
     fileprivate var onToggleItalic: (() -> Void)?
+    fileprivate var onSetTextColor: ((NSColor) -> Void)?
 
     func adjustSelection(by step: Int) {
         onAdjustSelection?(step)
     }
 
     func toggleItalic() { onToggleItalic?() }
+    func setTextColor(_ color: NSColor) { onSetTextColor?(color) }
 
     fileprivate func updateSelectionFontSize(_ size: Int?) {
         selectionFontSize = size.map { min(48, max(10, $0)) }
@@ -84,6 +86,7 @@ struct RichNoteEditor: NSViewRepresentable {
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
         coordinator.sizeController?.onAdjustSelection = nil
         coordinator.sizeController?.onToggleItalic = nil
+        coordinator.sizeController?.onSetTextColor = nil
     }
 
     @MainActor
@@ -103,6 +106,18 @@ struct RichNoteEditor: NSViewRepresentable {
                 guard let editor else { return }
                 editor.toggleItalic()
                 editor.window?.makeFirstResponder(editor)
+            }
+            controller?.onSetTextColor = { [weak self, weak editor] color in
+                guard let self, let editor else { return }
+                let scrollView = editor.enclosingScrollView
+                let origin = scrollView?.contentView.bounds.origin ?? .zero
+                editor.applyTextColor(color)
+                self.restoreViewport(of: editor, in: scrollView, to: origin)
+                editor.window?.makeFirstResponder(editor)
+                Task { @MainActor [weak self, weak editor, weak scrollView] in
+                    guard let self, let editor else { return }
+                    self.restoreViewport(of: editor, in: scrollView, to: origin)
+                }
             }
         }
 
@@ -211,6 +226,21 @@ struct RichNoteEditor: NSViewRepresentable {
 
 final class BoldNoteTextView: NSTextView {
     var onFontSizeAdjustment: ((Int) -> Void)?
+
+    func applyTextColor(_ color: NSColor) {
+        let range = selectedRange()
+        if range.length == 0 {
+            var attributes = typingAttributes
+            attributes[.foregroundColor] = color
+            typingAttributes = attributes
+            return
+        }
+        guard let storage = textStorage, NSMaxRange(range) <= storage.length else { return }
+        let replacement = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
+        replacement.addAttribute(.foregroundColor, value: color, range: NSRange(location: 0, length: replacement.length))
+        guard replaceRichText(replacement, in: range) else { return }
+        undoManager?.setActionName("Change Text Color")
+    }
 
     @discardableResult
     func replaceRichText(_ replacement: NSAttributedString, in range: NSRange) -> Bool {

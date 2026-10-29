@@ -5,6 +5,58 @@ import SwiftUI
 
 final class RichTextTests: XCTestCase {
     @MainActor
+    func testSelectedRedTextSurvivesSaveAndCanBeUndone() throws {
+        var text = "first second"
+        var richBody: Data?
+        let controller = NoteFontSizeController()
+        let parent = RichNoteEditor(text: Binding(get: { text }, set: { text = $0 }),
+                                    richBody: Binding(get: { richBody }, set: { richBody = $0 }),
+                                    fontSize: .constant(16), sizeController: controller)
+        let coordinator = parent.makeCoordinator()
+        let editor = BoldNoteTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        editor.isRichText = true
+        editor.isEditable = true
+        editor.allowsUndo = true
+        let window = NSWindow(contentRect: editor.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        let scroll = NSScrollView(frame: editor.frame)
+        scroll.documentView = editor
+        window.contentView = scroll
+        editor.font = .systemFont(ofSize: 16)
+        editor.textColor = .black
+        editor.string = text
+        editor.textStorage?.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: 18), range: NSRange(location: 0, length: 5))
+        editor.delegate = coordinator
+        coordinator.connectSizeController(controller, to: editor)
+        editor.setSelectedRange(NSRange(location: 0, length: 5))
+        let undo = try XCTUnwrap(editor.undoManager)
+        undo.groupsByEvent = false
+        undo.beginUndoGrouping()
+        controller.setTextColor(.red)
+        undo.endUndoGrouping()
+        let saved = try XCTUnwrap(richBody)
+        let reopened = try XCTUnwrap(RichNoteEditor.restoredBody(from: saved))
+        let red = try XCTUnwrap((reopened.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)?.usingColorSpace(.sRGB))
+        XCTAssertGreaterThan(red.redComponent, 0.9)
+        XCTAssertLessThan(red.greenComponent, 0.1)
+        let unchanged = try XCTUnwrap((reopened.attribute(.foregroundColor, at: 6, effectiveRange: nil) as? NSColor)?.usingColorSpace(.sRGB))
+        XCTAssertLessThan(unchanged.redComponent, 0.9)
+        let font = try XCTUnwrap(reopened.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        XCTAssertEqual(font.pointSize, 18)
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+        undo.undo()
+        XCTAssertNotEqual(editor.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor, NSColor.red)
+        undo.redo()
+        XCTAssertEqual(editor.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor, NSColor.red)
+        undo.beginUndoGrouping()
+        controller.setTextColor(.textColor)
+        undo.endUndoGrouping()
+        XCTAssertEqual(editor.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor, NSColor.textColor)
+        editor.setSelectedRange(NSRange(location: 12, length: 0))
+        controller.setTextColor(.red)
+        XCTAssertEqual(editor.typingAttributes[.foregroundColor] as? NSColor, NSColor.red)
+    }
+
+    @MainActor
     func testItalicShortcutAndButtonPreserveBoldAndSaveFormatting() throws {
         var text = "first second"
         var richBody: Data?

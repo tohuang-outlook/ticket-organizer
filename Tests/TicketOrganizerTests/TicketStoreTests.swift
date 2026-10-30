@@ -6,6 +6,8 @@ final class TicketStoreTests: XCTestCase {
     @MainActor
     func testTrafficFlowDisplaysAndPersistsWithLegacyCompatibility() throws {
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW03", "FW04", "FW05"]), "From FW03 to FW04 to FW05")
+        XCTAssertEqual(TicketNote.trafficFlowDescription(["FW01", "FW02", "FW03", "FW04", "FW05"]), "From FW01 to FW02 to FW03 to FW04 to FW05")
+        XCTAssertEqual(TicketNote.trafficFlowSlots(["FW03", "FW04", "FW05"]), ["FW03", "FW04", "FW05", "", ""])
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW03", "", "FW05"]), "From FW03 to FW05")
         XCTAssertEqual(TicketNote.trafficFlowDescription(["", "", ""]), "")
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -13,7 +15,7 @@ final class TicketStoreTests: XCTestCase {
         let url = folder.appendingPathComponent("tickets.json")
         let store = TicketStore(url: url)
         var note = makeNote()
-        note.trafficFlow = ["FW03", "FW04", "FW05"]
+        note.trafficFlow = ["FW01", "FW02", "FW03", "FW04", "FW05"]
         try store.add(note)
         let reopened = try XCTUnwrap(TicketStore(url: url).notes.first)
         XCTAssertEqual(reopened.trafficFlow, note.trafficFlow)

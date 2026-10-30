@@ -81,6 +81,10 @@ extension TicketNote {
         return selected.isEmpty ? "" : "From " + selected.joined(separator: " to ")
     }
 
+    static func trafficFlowSlots(_ firewalls: [String]) -> [String] {
+        Array((firewalls + Array(repeating: "", count: 5)).prefix(5))
+    }
+
     static func sortedByCreation(_ notes: [TicketNote], newestFirst: Bool) -> [TicketNote] {
         notes.sorted {
             if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
@@ -445,14 +449,15 @@ private struct TrafficFlowSelector: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Traffic Flow")
             HStack(spacing: 8) {
-                ForEach(1...3, id: \.self) { position in
+                ForEach(1...5, id: \.self) { position in
                     FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1])
                         .frame(maxWidth: .infinity)
                 }
             }
             let description = TicketNote.trafficFlowDescription(firewalls)
             if !description.isEmpty {
-                Text(description).font(.system(size: 20))
+                Text(description).font(.system(size: 26, weight: .bold))
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel(description)
             }
         }
@@ -473,7 +478,7 @@ private struct FirewallMenu: View {
                 }
             }
         } label: {
-            Text(selectedFirewall.isEmpty ? "Select Firewall" : selectedFirewall)
+            Text(selectedFirewall.isEmpty ? "Select FW" : selectedFirewall)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityLabel("Traffic Flow firewall \(position)")
@@ -487,7 +492,7 @@ struct NewTicketView: View {
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
     @State private var bodyFontSize = 16
-    @State private var trafficFlow = ["", "", ""]
+    @State private var trafficFlow = TicketNote.trafficFlowSlots([])
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
@@ -553,7 +558,7 @@ struct EditTicketView: View {
         _ritm = State(initialValue: note.ritm); _chg = State(initialValue: note.chg); _title = State(initialValue: note.title)
         _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _isImportant = State(initialValue: note.isImportant); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
         _bodyFontSize = State(initialValue: RichNoteEditor.preferredFontSize(from: note.richBody))
-        _trafficFlow = State(initialValue: Array((note.trafficFlow + ["", "", ""]).prefix(3)))
+        _trafficFlow = State(initialValue: TicketNote.trafficFlowSlots(note.trafficFlow))
         _createdTimeText = State(initialValue: CreatedTimeInput.format(note.createdAt))
     }
     private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes, excluding: original.id) }

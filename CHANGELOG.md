@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.18
+
+- Expand Traffic Flow to five firewall menus and show the route in 26 pt bold text.
+
 ## 1.4.17
 
 - Display a 20 pt traffic flow line beneath the firewall selectors and save the selections with each ticket.

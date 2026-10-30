@@ -20,10 +20,11 @@ struct FirewallCLIResult {
     var hostname: String?
     var zones: [String]
     var hasMultipleHostnames: Bool
+    var zonesMayBeTruncated: Bool
 }
 
 enum FirewallCLIParser {
-    // These patterns cover PAN-OS 'show system info' and configuration in set format.
+    // Supports PAN-OS system info, set-format config, and show interface all output.
     // Only explicit fields are read; the pasted CLI text is never executed or saved.
     static func parse(_ text: String) -> FirewallCLIResult {
         func capture(_ pattern: String, groups: [Int]) -> [String] {
@@ -44,8 +45,41 @@ enum FirewallCLIParser {
             return values.filter { seen.insert($0.lowercased()).inserted }
         }
         let names = unique(capture(#"^[\t ]*hostname[\t ]*:[\t ]*([^\s]+)[\t ]*\r?$"#, groups: [1]) +
-                           capture(#"^[\t ]*set[\t ]+deviceconfig[\t ]+system[\t ]+hostname[\t ]+(?:"([^"]+)"|(\S+))[\t ]*\r?$"#, groups: [1, 2]))
-        let zones = unique(capture(#"^[\t ]*set[\t ]+zone[\t ]+(?:"([^"]+)"|(\S+))(?:[\t ]|\r?$)"#, groups: [1, 2]))
-        return FirewallCLIResult(hostname: names.count == 1 ? names.first : nil, zones: names.count > 1 ? [] : zones, hasMultipleHostnames: names.count > 1)
+                           capture(#"^[\t ]*set[\t ]+deviceconfig[\t ]+system[\t ]+hostname[\t ]+(?:"([^"]+)"|(\S+))[\t ]*\r?$"#, groups: [1, 2]) +
+                           capture(#"^[\t ]*[^\s@]+@([A-Za-z0-9._-]+)(?:\((?:active|passive)\))?[>#][\t ]*show[\t ]+interface[\t ]+all[\t ]*\r?$"#, groups: [1]))
+        let setZones = unique(capture(#"^[\t ]*set[\t ]+zone[\t ]+(?:"([^"]+)"|(\S+))(?:[\t ]|\r?$)"#, groups: [1, 2]))
+
+        // Read the fixed-width logical-interface table by its headers. Empty zone
+        // fields must not be confused with the adjacent forwarding field.
+        var inLogicalSection = false
+        var bounds: (Int, Int)?
+        var tableZones: [String] = []
+        for line in text.components(separatedBy: .newlines) {
+            if line.lowercased().contains("total configured logical interfaces:") {
+                inLogicalSection = true
+                bounds = nil
+                continue
+            }
+            guard inLogicalSection else { continue }
+            if bounds == nil {
+                if let zone = line.range(of: "zone", options: .caseInsensitive),
+                   let forwarding = line.range(of: "forwarding", options: .caseInsensitive),
+                   line.lowercased().contains("vsys"), zone.lowerBound < forwarding.lowerBound {
+                    bounds = (line.distance(from: line.startIndex, to: zone.lowerBound), line.distance(from: line.startIndex, to: forwarding.lowerBound))
+                }
+                continue
+            }
+            guard let (start, end) = bounds else { continue }
+            let chars = Array(line)
+            guard chars.count > start else { continue }
+            let prefix = String(chars.prefix(start)).split(whereSeparator: \.isWhitespace)
+            guard prefix.count >= 3, Int(prefix[1]) != nil, Int(prefix[2]) != nil else { continue }
+            let zone = String(chars[start..<min(end, chars.count)]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !zone.isEmpty && zone.caseInsensitiveCompare("N/A") != .orderedSame && zone != "-" { tableZones.append(zone) }
+        }
+        let fromTable = setZones.isEmpty && !tableZones.isEmpty
+        let zones = fromTable ? unique(tableZones) : setZones
+        return FirewallCLIResult(hostname: names.count == 1 ? names.first : nil, zones: names.count > 1 ? [] : zones,
+                                 hasMultipleHostnames: names.count > 1, zonesMayBeTruncated: names.count <= 1 && fromTable)
     }
 }

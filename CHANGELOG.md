@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.27
+
+- Extract the firewall hostname and zone column from PAN-OS `show interface all` output, with a warning that zone names may be truncated.
+
 ## 1.4.26
 
 - Add Firewall Settings to manage firewall names, device groups, zones, and active status.

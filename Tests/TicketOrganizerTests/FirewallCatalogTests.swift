@@ -14,9 +14,46 @@ final class FirewallCatalogTests: XCTestCase {
         XCTAssertEqual(result.hostname, "edge-fw01")
         XCTAssertEqual(result.zones, ["Trust", "Guest Zone"])
         XCTAssertFalse(result.hasMultipleHostnames)
+        XCTAssertFalse(result.zonesMayBeTruncated)
         let unsupported = FirewallCLIParser.parse("set zone\nset unrelated information\nset zone <name> network layer3")
         XCTAssertNil(unsupported.hostname)
         XCTAssertTrue(unsupported.zones.isEmpty)
+    }
+
+    func testPANOSInterfaceTableUsesZoneColumnAndWarnsAboutTruncation() {
+        let text = """
+        operator@TEST-FW02(active)> show interface all
+        total configured hardware interfaces: 1
+        name                    id    speed/duplex/state/fec        mac address
+        ethernet1/1             1     1000/full/up/auto             00:00:00:00:00:00
+
+        total configured logical interfaces: 4
+        name                      id    vsys zone             forwarding               tag    address
+        ------------------------- ----- ---- ---------------- ------------------------ ------ ------------------
+        ae1                       16    1                     N/A                      0      N/A
+        ae1.16                    1124  1    test_inside      vr:test                  16     192.0.2.1/24
+        ae1.22                    1123  1    test_inside      vr:test                  22     192.0.2.2/24
+        ae1.35                    1128  1    another_zone     vr:test                  35     192.0.2.3/24
+        ha1-a                     5     0                     ha                       0      192.0.2.4/30
+        operator@TEST-FW02(active)>
+        """
+        let result = FirewallCLIParser.parse(text)
+        XCTAssertEqual(result.hostname, "TEST-FW02")
+        XCTAssertEqual(result.zones, ["test_inside", "another_zone"])
+        XCTAssertTrue(result.zonesMayBeTruncated)
+        XCTAssertFalse(result.hasMultipleHostnames)
+    }
+
+    func testInterfaceTableDoesNotMixIntoSetFormatZones() {
+        let input = """
+        set zone full_zone_name network layer3 ethernet1/1
+        total configured logical interfaces: 1
+        name                      id    vsys zone             forwarding               tag    address
+        ae1.16                    1124  1    full_zone_name   vr:test                  16     192.0.2.1/24
+        """
+        let result = FirewallCLIParser.parse(input)
+        XCTAssertEqual(result.zones, ["full_zone_name"])
+        XCTAssertFalse(result.zonesMayBeTruncated)
     }
 
     func testMultipleHostnamesDoNotProduceAmbiguousImport() {

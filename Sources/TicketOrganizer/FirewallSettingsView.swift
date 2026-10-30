@@ -81,12 +81,14 @@ private struct FirewallEditorView: View {
             return
         }
         guard result.hostname != nil || !result.zones.isEmpty else {
-            cliMessage = "No supported hostname or zone lines found. Enter the fields manually or paste PAN-OS set-format output."
+            cliMessage = "No supported hostname or zone lines found. Enter the fields manually or paste PAN-OS output."
             return
         }
         if let hostname = result.hostname { name = hostname }
         if !result.zones.isEmpty { zoneText = result.zones.joined(separator: "\n") }
-        cliMessage = "Fields extracted. Review the firewall name and zones, and enter the device group before saving."
+        cliMessage = result.zonesMayBeTruncated
+            ? "Interface tables may truncate zone names. Verify and complete every zone name before saving; enter the device group manually."
+            : "Fields extracted. Review the firewall name and zones, and enter the device group before saving."
     }
 
     private func save() {
@@ -113,7 +115,7 @@ private struct FirewallEditorView: View {
             TextEditor(text: $zoneText).font(.body).frame(minHeight: 80, maxHeight: 120).border(Color.secondary.opacity(0.25))
             DisclosureGroup("Import from CLI output", isExpanded: $showCLI) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Paste hostname and set zone lines from one PAN-OS firewall. Review the extracted fields before saving.")
+                    Text("Paste PAN-OS show interface all, hostname, or set zone output from one firewall. Review the extracted fields before saving.")
                         .font(.caption).foregroundStyle(.secondary)
                     TextEditor(text: $cliText).font(.system(.caption, design: .monospaced)).frame(height: 100).border(Color.secondary.opacity(0.25))
                     HStack {

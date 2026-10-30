@@ -12,6 +12,38 @@ final class TicketStore: ObservableObject {
     private var lastSavedData: Data?
     var onLocalChange: (() -> Void)?
     lazy var cloudSync = TicketCloudSync(store: self)
+    var firewalls: [FirewallDefinition] { archive.firewalls ?? FirewallDefinition.placeholders }
+
+    func saveFirewall(_ firewall: FirewallDefinition, isNew: Bool) throws {
+        var item = firewall
+        item.name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.deviceGroup = item.deviceGroup.trimmingCharacters(in: .whitespacesAndNewlines)
+        item.zones = item.zones.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !item.id.isEmpty, !item.name.isEmpty else { throw FirewallError.nameRequired }
+        guard Set(item.zones.map { $0.lowercased() }).count == item.zones.count else { throw FirewallError.duplicateZone }
+        var entries = firewalls
+        guard !entries.contains(where: { $0.id != item.id && $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) else { throw FirewallError.duplicateName }
+        if isNew {
+            guard !entries.contains(where: { $0.id.caseInsensitiveCompare(item.id) == .orderedSame }) else { throw FirewallError.duplicateName }
+            entries.append(item)
+        } else if let index = entries.firstIndex(where: { $0.id == item.id }) { entries[index] = item }
+        else { throw FirewallError.missingFirewall }
+        var next = archive
+        next.firewalls = entries
+        try commit(next)
+    }
+
+    enum FirewallError: LocalizedError {
+        case nameRequired, duplicateName, duplicateZone, missingFirewall
+        var errorDescription: String? {
+            switch self {
+            case .nameRequired: "Enter a firewall name."
+            case .duplicateName: "This firewall name is already in use or reserved by an existing firewall."
+            case .duplicateZone: "Each zone must have a unique name."
+            case .missingFirewall: "This firewall is no longer available. Reopen Firewall Settings and try again."
+            }
+        }
+    }
 
     init(url: URL? = nil) {
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -111,7 +143,9 @@ final class TicketStore: ObservableObject {
         }
         let currentData = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
         guard currentData == lastSavedData else { throw StoreError.concurrentChange }
-        let document = TicketBackupDocument(archive: archive)
+        var backupArchive = archive
+        if backupArchive.firewalls == nil { backupArchive.firewalls = FirewallDefinition.placeholders }
+        let document = TicketBackupDocument(archive: backupArchive)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(document)
@@ -135,6 +169,7 @@ final class TicketStore: ObservableObject {
         // converge toward the restored snapshot. A tombstoned ID gets a new ID to preserve
         // the store's delete-wins rule and prevent deleted tickets from being resurrected.
         var next = archive
+        if let firewalls = backup.archive.firewalls { next.firewalls = firewalls }
         if next.records.isEmpty && next.cloudAccountID == nil {
             next.cloudAccountID = backup.archive.cloudAccountID
             next.syncEnabled = backup.archive.syncEnabled

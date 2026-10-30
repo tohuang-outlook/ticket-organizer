@@ -45,6 +45,8 @@ struct TicketArchive: Codable {
     var syncEnabled = false
     var cloudAccountID: String?
     var lastSyncAt: Date?
+    // Local catalog is included in backups; CloudKit currently syncs ticket records only.
+    var firewalls: [FirewallDefinition]?
 
     var notes: [TicketNote] { records.values.compactMap(\.note) }
     var pendingRecords: [TicketSyncRecord] { records.values.filter(\.isPending) }

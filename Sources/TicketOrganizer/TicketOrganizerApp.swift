@@ -22,7 +22,10 @@ struct TicketOrganizerApp: App {
                 }
             }
         Settings {
-            CloudSyncSettingsView(store: store, sync: store.cloudSync).environment(\.locale, Locale(identifier: "en"))
+            TabView {
+                FirewallSettingsView(store: store).tabItem { Label("Firewalls", systemImage: "network") }
+                CloudSyncSettingsView(store: store, sync: store.cloudSync).tabItem { Label("iCloud", systemImage: "icloud") }
+            }.environment(\.locale, Locale(identifier: "en"))
         }
     }
 }
@@ -86,8 +89,6 @@ extension TicketNote {
         firewalls + Array(repeating: "", count: max(0, 3 - firewalls.count))
     }
 
-    static let zoneOptions = (1...4).map { "zone \($0)" }
-
     static func zoneSlots(_ zones: [[String]]) -> [[String]] {
         zones + Array(repeating: [], count: max(0, 3 - zones.count))
     }
@@ -104,16 +105,11 @@ extension TicketNote {
     }
 
     static func togglingZone(_ zone: String, in selected: [String]) -> [String] {
-        guard zoneOptions.contains(zone) else { return selected }
+        guard !zone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return selected }
         var result = selected
         if let index = result.firstIndex(of: zone) { result.remove(at: index) }
         else if result.count < 2 { result.append(zone) }
         return result
-    }
-
-    static func deviceGroupPlaceholder(for firewall: String) -> String? {
-        guard let index = ["FW01", "FW02", "FW03", "FW04", "FW05"].firstIndex(of: firewall) else { return nil }
-        return "(device group \(index + 1))"
     }
 
     static func sortedByCreation(_ notes: [TicketNote], newestFirst: Bool) -> [TicketNote] {
@@ -184,7 +180,7 @@ struct ContentView: View {
     private func openTicket(_ id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }) else { return }
         selectedID = id
-        TicketEditorWindows.shared.open(note: note, existingNotes: store.notes) { updated in
+        TicketEditorWindows.shared.open(note: note, existingNotes: store.notes, store: store) { updated in
             try store.update(updated, originalStage: note.stage, originalIsImportant: note.isImportant)
         }
     }
@@ -229,7 +225,7 @@ struct ContentView: View {
                 } primaryAction: { ids in
                     if let id = ids.first { openTicket(id) }
                 }
-            }.sheet(isPresented: $showNew) { NewTicketView(existingNotes: store.notes) { try store.add($0); selection = .draft; selectedID = $0.id } }
+            }.sheet(isPresented: $showNew) { NewTicketView(store: store, existingNotes: store.notes) { try store.add($0); selection = .draft; selectedID = $0.id } }
         }
         .alert("Delete this ticket?", isPresented: $showDeleteConfirmation, presenting: ticketToDelete) { note in
             Button("Cancel", role: .cancel) { ticketToDelete = nil }
@@ -477,26 +473,31 @@ private struct PlanEditorHeading: View {
 private struct TrafficFlowSelector: View {
     @Binding var firewalls: [String]
     @Binding var zones: [[String]]
+    let catalog: [FirewallDefinition]
+
+    private func definition(_ id: String) -> FirewallDefinition? { catalog.first { $0.id == id } }
+    private func displayName(_ id: String) -> String { definition(id)?.name ?? id }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Traffic Flow")
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { position in
-                    FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1], selectedZones: $zones[position - 1])
+                    FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1], selectedZones: $zones[position - 1], catalog: catalog)
                         .frame(maxWidth: .infinity)
                 }
             }
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { position in
-                    ZoneMenu(position: position, firewall: firewalls[position - 1], selectedZones: $zones[position - 1])
+                    ZoneMenu(position: position, firewall: firewalls[position - 1], selectedZones: $zones[position - 1], availableZones: definition(firewalls[position - 1])?.zones ?? [])
                         .frame(maxWidth: .infinity)
                 }
             }
             if let firstSelected = firewalls.prefix(3).firstIndex(where: { !$0.isEmpty }) {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
-                        Text(TicketNote.deviceGroupPlaceholder(for: firewalls[index]) ?? "")
+                        let group = definition(firewalls[index])?.deviceGroup ?? ""
+                        Text(group.isEmpty ? "" : "(\(group))")
                             .font(.system(size: 24, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.leading, 8)
@@ -505,7 +506,7 @@ private struct TrafficFlowSelector: View {
                 }
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
-                        Text(firewalls[index].isEmpty ? "" : "\(index == firstSelected ? "From" : "to") \(firewalls[index])")
+                        Text(firewalls[index].isEmpty ? "" : "\(index == firstSelected ? "From" : "to") \(displayName(firewalls[index]))")
                             .font(.system(size: 26, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.leading, 8)
@@ -513,7 +514,7 @@ private struct TrafficFlowSelector: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(TicketNote.trafficFlowDescription(Array(firewalls.prefix(3))))
+                .accessibilityLabel(TicketNote.trafficFlowDescription(Array(firewalls.prefix(3)).map(displayName)))
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
                         Text(firewalls[index].isEmpty ? "" : zones[index].joined(separator: "--->"))
@@ -524,7 +525,7 @@ private struct TrafficFlowSelector: View {
                     }
                 }
             }
-            let additionalSteps = TicketNote.additionalTrafficSteps(firewalls, zones: zones)
+            let additionalSteps = TicketNote.additionalTrafficSteps(firewalls.map(displayName), zones: zones)
             if !additionalSteps.isEmpty {
                 Text("Additional saved steps (preserved): " + additionalSteps.joined(separator: "; "))
                     .font(.caption)
@@ -539,6 +540,7 @@ private struct FirewallMenu: View {
     let position: Int
     @Binding var selectedFirewall: String
     @Binding var selectedZones: [String]
+    let catalog: [FirewallDefinition]
 
     private func selectFirewall(_ firewall: String) {
         if firewall != selectedFirewall { selectedZones = [] }
@@ -548,14 +550,13 @@ private struct FirewallMenu: View {
     var body: some View {
         Menu {
             Button("Clear") { selectFirewall("") }
-            ForEach(1...5, id: \.self) { number in
-                let firewall = String(format: "FW%02d", number)
-                Button(firewall) {
-                    selectFirewall(firewall)
+            ForEach(catalog.filter(\.isActive)) { firewall in
+                Button(firewall.name) {
+                    selectFirewall(firewall.id)
                 }
             }
         } label: {
-            Text(selectedFirewall.isEmpty ? "Select FW" : selectedFirewall)
+            Text(selectedFirewall.isEmpty ? "Select FW" : (catalog.first { $0.id == selectedFirewall }?.name ?? selectedFirewall))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityLabel("Traffic Flow firewall \(position)")
@@ -566,12 +567,13 @@ private struct ZoneMenu: View {
     let position: Int
     let firewall: String
     @Binding var selectedZones: [String]
+    let availableZones: [String]
 
     var body: some View {
         Menu {
             Button("Clear zones") { selectedZones = [] }
                 .disabled(selectedZones.isEmpty)
-            ForEach(TicketNote.zoneOptions, id: \.self) { zone in
+            ForEach(availableZones + selectedZones.filter { !availableZones.contains($0) }, id: \.self) { zone in
                 Button {
                     selectedZones = TicketNote.togglingZone(zone, in: selectedZones)
                 } label: {
@@ -593,6 +595,7 @@ private struct ZoneMenu: View {
 
 struct NewTicketView: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject var store: TicketStore
     let existingNotes: [TicketNote]
     var onSave: (TicketNote) throws -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
@@ -631,7 +634,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
-            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones)
+            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, catalog: store.firewalls)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -641,6 +644,7 @@ struct NewTicketView: View {
 }
 
 struct EditTicketView: View {
+    @ObservedObject var store: TicketStore
     var onClose: () -> Void
     var onDirtyChange: (Bool) -> Void
     let original: TicketNote
@@ -661,8 +665,8 @@ struct EditTicketView: View {
     @State private var createdTimeText: String
     @State private var saveError: String?
 
-    init(note: TicketNote, existingNotes: [TicketNote], onClose: @escaping () -> Void, onDirtyChange: @escaping (Bool) -> Void, onSave: @escaping (TicketNote) throws -> Void) {
-        original = note; self.existingNotes = existingNotes; self.onClose = onClose; self.onDirtyChange = onDirtyChange; self.onSave = onSave
+    init(note: TicketNote, existingNotes: [TicketNote], store: TicketStore, onClose: @escaping () -> Void, onDirtyChange: @escaping (Bool) -> Void, onSave: @escaping (TicketNote) throws -> Void) {
+        self.store = store; original = note; self.existingNotes = existingNotes; self.onClose = onClose; self.onDirtyChange = onDirtyChange; self.onSave = onSave
         _ritm = State(initialValue: note.ritm); _chg = State(initialValue: note.chg); _title = State(initialValue: note.title)
         _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _isImportant = State(initialValue: note.isImportant); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
         _bodyFontSize = State(initialValue: RichNoteEditor.preferredFontSize(from: note.richBody))
@@ -712,7 +716,7 @@ struct EditTicketView: View {
                 Text("Local time")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones)
+            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, catalog: store.firewalls)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack {
@@ -757,7 +761,7 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
         windows[id]?.close()
     }
 
-    func open(note: TicketNote, existingNotes: [TicketNote], onSave: @escaping (TicketNote) throws -> Void) {
+    func open(note: TicketNote, existingNotes: [TicketNote], store: TicketStore, onSave: @escaping (TicketNote) throws -> Void) {
         if let existing = windows[note.id] {
             existing.makeKeyAndOrderFront(nil)
             return
@@ -766,7 +770,7 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
         window.title = "\(note.ritm) · \(note.chg) — Edit Note"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentView = NSHostingView(rootView: EditTicketView(note: note, existingNotes: existingNotes, onClose: { [weak window] in window?.performClose(nil) }, onDirtyChange: { [weak window] dirty in window?.isDocumentEdited = dirty }, onSave: { [weak window] updated in
+        window.contentView = NSHostingView(rootView: EditTicketView(note: note, existingNotes: existingNotes, store: store, onClose: { [weak window] in window?.performClose(nil) }, onDirtyChange: { [weak window] dirty in window?.isDocumentEdited = dirty }, onSave: { [weak window] updated in
             try onSave(updated)
             window?.isDocumentEdited = false
         }).environment(\.locale, Locale(identifier: "en")))

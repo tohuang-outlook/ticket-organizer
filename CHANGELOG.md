@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.26
+
+- Add Firewall Settings to manage firewall names, device groups, zones, and active status.
+- Extract hostname and zone fields from supported PAN-OS CLI output for review before saving.
+
 ## 1.4.25
 
 - Show three firewall and Zone selectors while preserving additional steps saved by earlier versions.

@@ -14,7 +14,9 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
 - Warn when an entered RITM already exists, with the matching CHG, status, and title. The warning does not block intentional duplicates.
 - Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
-- Choose FW01 through FW05 independently in the three Traffic Flow menus below Created. Each step appears in 26 pt bold text below its corresponding menu, with a numbered device group placeholder in 24 pt bold above it. The choices are saved with the ticket; use Clear to remove a selection. Additional steps saved by older versions remain visible as read-only text and are preserved.
+- Configure firewall names, device groups, available zones, and active status in Ticket Organizer > Settings > Firewalls. FW01–FW05 and their numbered device groups and zones are initial placeholders. Active firewalls appear in the three Traffic Flow menus below Created; each step and its device group appear below its menu. Choices are saved with the ticket; use Clear to remove a selection. Additional steps saved by older versions remain visible as read-only text and are preserved.
+- Use Import CLI Output in Firewall Settings to extract explicit PAN-OS `hostname:` or `set deviceconfig system hostname` and `set zone` lines from one firewall. Review the editable fields before saving; device group is entered manually. Pasted CLI text is processed locally and is not saved.
+  Supported line examples follow the Palo Alto Networks documentation for [system information](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/use-the-cli/view-settings-and-statistics) and the [PAN-OS CLI command hierarchy](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/cli-command-hierarchy/pan-os-11-2-configure-cli-command-hierarchy).
 - After selecting a firewall, use its Zones menu to choose up to two zones in order. The selected path appears in 20 pt bold text below that firewall and is saved with the ticket. Deselect a zone to change the order; changing or clearing the firewall clears its zones.
 - Keep the current text and scroll position visible when changing body font size with Command-period or Command-minus.
 - Use the bottom Smaller/Larger controls to change only highlighted plan text by 2 pt; the controls show the selected text size and prompt you to select text first when nothing is selected.
@@ -58,7 +60,7 @@ Writes are locked across app instances. If another instance or external tool cha
 
 Update every Mac to 1.2.8 or newer before using Completed with iCloud. Older app versions cannot read the Completed workflow value and may pause rather than load the notes. Update every Mac to 1.2.1 or newer before using Closed with iCloud, and to 1.2.2 or newer before using Working.
 
-Update every Mac to 1.4.23 or newer before editing tickets with saved Traffic Flow and zone selections. Older versions may not preserve all selections when they save a ticket.
+Update every Mac to 1.4.26 or newer before editing tickets or firewall settings. Older versions may not preserve newer fields or firewall settings when they save data. Firewall settings are stored locally and included in ticket backups; they are not synced by the current iCloud implementation.
 
 Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
 
@@ -87,7 +89,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.25 BUILD_NUMBER=61 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.26 BUILD_NUMBER=62 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -134,7 +136,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.25)
+## Release acceptance gates (1.4.26)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

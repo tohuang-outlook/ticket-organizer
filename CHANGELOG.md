@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.15
+
+- Replace the Traffic Flow icon with a firewall menu containing FW01 through FW05 below Created.
+
 ## 1.4.14
 
 - Add a Traffic Flow icon and an empty panel to the note editor.

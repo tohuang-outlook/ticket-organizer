@@ -408,31 +408,10 @@ private struct SelectionFontSizeControl: View {
 
 private struct PlanEditorHeading: View {
     @ObservedObject var controller: NoteFontSizeController
-    @State private var showTrafficFlow = false
 
     var body: some View {
         HStack {
             Text("Change, Backout, and Validation Plan").font(.headline)
-            Button { showTrafficFlow.toggle() } label: {
-                Image(systemName: "arrow.left.arrow.right")
-            }
-            .help("Traffic Flow")
-            .accessibilityLabel("Traffic Flow")
-            .popover(isPresented: $showTrafficFlow, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Traffic Flow").font(.headline)
-                        Spacer()
-                        Button("Close") { showTrafficFlow = false }
-                    }
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Color.secondary.opacity(0.3))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .accessibilityLabel("Traffic Flow area")
-                }
-                .padding(16)
-                .frame(width: 420, height: 260)
-            }
             Spacer()
             Button { controller.toggleItalic() } label: { Text("I").italic().bold() }
                 .help("Italic (⌘I)")
@@ -448,6 +427,46 @@ private struct PlanEditorHeading: View {
             Button("Default") { controller.setTextColor(.textColor) }
                 .help("Restore the default text color")
                 .accessibilityLabel("Restore default text color")
+        }
+    }
+}
+
+private struct TrafficFlowSelector: View {
+    @State private var selectedFirewall = ""
+    @State private var showTrafficFlow = false
+
+    var body: some View {
+        HStack {
+            Text("Traffic Flow")
+            Menu {
+                ForEach(1...5, id: \.self) { number in
+                    let firewall = String(format: "FW%02d", number)
+                    Button(firewall) {
+                        selectedFirewall = firewall
+                        showTrafficFlow = true
+                    }
+                }
+            } label: {
+                Text(selectedFirewall.isEmpty ? "Select Firewall" : selectedFirewall)
+                    .frame(minWidth: 110, alignment: .leading)
+            }
+            .accessibilityLabel("Traffic Flow firewall")
+            .popover(isPresented: $showTrafficFlow, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Traffic Flow — \(selectedFirewall)").font(.headline)
+                        Spacer()
+                        Button("Close") { showTrafficFlow = false }
+                    }
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.secondary.opacity(0.3))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Traffic Flow area")
+                }
+                .padding(16)
+                .frame(width: 420, height: 260)
+            }
+            Spacer()
         }
     }
 }
@@ -490,6 +509,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
+            TrafficFlowSelector()
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -564,6 +584,7 @@ struct EditTicketView: View {
                 Text("Local time")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            TrafficFlowSelector()
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack {

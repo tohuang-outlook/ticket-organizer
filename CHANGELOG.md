@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.21
+
+- Display device group labels in 20 pt bold text.
+
 ## 1.4.20
 
 - Show a numbered device group placeholder above each selected firewall in Traffic Flow.

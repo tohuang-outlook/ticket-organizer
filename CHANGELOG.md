@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.24
+
+- Display each firewall's zone path in 20 pt bold text.
+
 ## 1.4.23
 
 - Add ordered selections of up to two zones per firewall and display each zone path under its firewall.

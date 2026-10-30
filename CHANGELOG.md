@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.16
+
+- Show three independently selectable firewall menus across the Traffic Flow row.
+
 ## 1.4.15
 
 - Replace the Traffic Flow icon with a firewall menu containing FW01 through FW05 below Created.

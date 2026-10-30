@@ -432,41 +432,52 @@ private struct PlanEditorHeading: View {
 }
 
 private struct TrafficFlowSelector: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Traffic Flow")
+            HStack(spacing: 8) {
+                ForEach(1...3, id: \.self) { position in
+                    FirewallMenu(position: position)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+}
+
+private struct FirewallMenu: View {
+    let position: Int
     @State private var selectedFirewall = ""
     @State private var showTrafficFlow = false
 
     var body: some View {
-        HStack {
-            Text("Traffic Flow")
-            Menu {
-                ForEach(1...5, id: \.self) { number in
-                    let firewall = String(format: "FW%02d", number)
-                    Button(firewall) {
-                        selectedFirewall = firewall
-                        showTrafficFlow = true
-                    }
+        Menu {
+            ForEach(1...5, id: \.self) { number in
+                let firewall = String(format: "FW%02d", number)
+                Button(firewall) {
+                    selectedFirewall = firewall
+                    showTrafficFlow = true
                 }
-            } label: {
-                Text(selectedFirewall.isEmpty ? "Select Firewall" : selectedFirewall)
-                    .frame(minWidth: 110, alignment: .leading)
             }
-            .accessibilityLabel("Traffic Flow firewall")
-            .popover(isPresented: $showTrafficFlow, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Traffic Flow — \(selectedFirewall)").font(.headline)
-                        Spacer()
-                        Button("Close") { showTrafficFlow = false }
-                    }
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Color.secondary.opacity(0.3))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .accessibilityLabel("Traffic Flow area")
+        } label: {
+            Text(selectedFirewall.isEmpty ? "Select Firewall" : selectedFirewall)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityLabel("Traffic Flow firewall \(position)")
+        .popover(isPresented: $showTrafficFlow, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Traffic Flow — \(selectedFirewall)").font(.headline)
+                    Spacer()
+                    Button("Close") { showTrafficFlow = false }
                 }
-                .padding(16)
-                .frame(width: 420, height: 260)
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.secondary.opacity(0.3))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("Traffic Flow area")
             }
-            Spacer()
+            .padding(16)
+            .frame(width: 420, height: 260)
         }
     }
 }

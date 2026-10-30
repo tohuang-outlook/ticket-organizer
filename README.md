@@ -14,7 +14,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
 - Warn when an entered RITM already exists, with the matching CHG, status, and title. The warning does not block intentional duplicates.
 - Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
-- Choose FW01 through FW05 independently in any of the three Traffic Flow menus below Created to open the corresponding Traffic Flow panel.
+- Choose FW01 through FW05 independently in the three Traffic Flow menus below Created. A 20 pt line shows the selected route, and the choices are saved with the ticket. Use Clear to remove a selection.
 - Keep the current text and scroll position visible when changing body font size with Command-period or Command-minus.
 - Use the bottom Smaller/Larger controls to change only highlighted plan text by 2 pt; the controls show the selected text size and prompt you to select text first when nothing is selected.
 - Working tickets can also be edited and saved with only RITM while their details are still incomplete.
@@ -57,6 +57,8 @@ Writes are locked across app instances. If another instance or external tool cha
 
 Update every Mac to 1.2.8 or newer before using Completed with iCloud. Older app versions cannot read the Completed workflow value and may pause rather than load the notes. Update every Mac to 1.2.1 or newer before using Closed with iCloud, and to 1.2.2 or newer before using Working.
 
+Update every Mac to 1.4.17 or newer before editing tickets with saved Traffic Flow selections. Older versions do not preserve this new field when they save a ticket.
+
 Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
 
 Older versions did not record creation time. Their last-modified timestamp is used as the initial creation time and preserved on subsequent edits. The original creation time cannot be reconstructed.
@@ -84,7 +86,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.16 BUILD_NUMBER=52 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.17 BUILD_NUMBER=53 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -131,7 +133,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.16)
+## Release acceptance gates (1.4.17)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

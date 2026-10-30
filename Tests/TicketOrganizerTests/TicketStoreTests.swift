@@ -4,6 +4,26 @@ import Darwin
 
 final class TicketStoreTests: XCTestCase {
     @MainActor
+    func testTrafficFlowDisplaysAndPersistsWithLegacyCompatibility() throws {
+        XCTAssertEqual(TicketNote.trafficFlowDescription(["FW03", "FW04", "FW05"]), "From FW03 to FW04 to FW05")
+        XCTAssertEqual(TicketNote.trafficFlowDescription(["FW03", "", "FW05"]), "From FW03 to FW05")
+        XCTAssertEqual(TicketNote.trafficFlowDescription(["", "", ""]), "")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        var note = makeNote()
+        note.trafficFlow = ["FW03", "FW04", "FW05"]
+        try store.add(note)
+        let reopened = try XCTUnwrap(TicketStore(url: url).notes.first)
+        XCTAssertEqual(reopened.trafficFlow, note.trafficFlow)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(note)) as? [String: Any])
+        json.removeValue(forKey: "trafficFlow")
+        let legacy = try JSONDecoder().decode(TicketNote.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertTrue(legacy.trafficFlow.isEmpty)
+    }
+
+    @MainActor
     func testRITMOnlyWorkingTicketCanBeEditedAndReopened() async throws {
         XCTAssertTrue(TicketStage.draft.allowsIncompleteDetails)
         XCTAssertTrue(TicketStage.working.allowsIncompleteDetails)

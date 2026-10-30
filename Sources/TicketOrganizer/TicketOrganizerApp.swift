@@ -64,6 +64,7 @@ struct TicketNote: Identifiable, Codable, Hashable {
     var updatedAt = Date()
     var richBody: Data? = nil
     var createdAt = Date()
+    var trafficFlow: [String] = []
 }
 
 extension TicketNote {
@@ -75,6 +76,11 @@ extension TicketNote {
         notes.filter { $0.isImportant || $0.stage == .important }
     }
 
+    static func trafficFlowDescription(_ firewalls: [String]) -> String {
+        let selected = firewalls.filter { !$0.isEmpty }
+        return selected.isEmpty ? "" : "From " + selected.joined(separator: " to ")
+    }
+
     static func sortedByCreation(_ notes: [TicketNote], newestFirst: Bool) -> [TicketNote] {
         notes.sorted {
             if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
@@ -83,7 +89,7 @@ extension TicketNote {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, ritm, chg, title, body, stage, isImportant, priority, owner, updatedAt, richBody, createdAt
+        case id, ritm, chg, title, body, stage, isImportant, priority, owner, updatedAt, richBody, createdAt, trafficFlow
     }
 
     init(from decoder: Decoder) throws {
@@ -102,6 +108,7 @@ extension TicketNote {
         richBody = try values.decodeIfPresent(Data.self, forKey: .richBody)
         // Earlier versions recorded only the last modification date.
         createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? updatedAt
+        trafficFlow = try values.decodeIfPresent([String].self, forKey: .trafficFlow) ?? []
     }
 }
 
@@ -432,14 +439,21 @@ private struct PlanEditorHeading: View {
 }
 
 private struct TrafficFlowSelector: View {
+    @Binding var firewalls: [String]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Traffic Flow")
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { position in
-                    FirewallMenu(position: position)
+                    FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1])
                         .frame(maxWidth: .infinity)
                 }
+            }
+            let description = TicketNote.trafficFlowDescription(firewalls)
+            if !description.isEmpty {
+                Text(description).font(.system(size: 20))
+                    .accessibilityLabel(description)
             }
         }
     }
@@ -447,16 +461,15 @@ private struct TrafficFlowSelector: View {
 
 private struct FirewallMenu: View {
     let position: Int
-    @State private var selectedFirewall = ""
-    @State private var showTrafficFlow = false
+    @Binding var selectedFirewall: String
 
     var body: some View {
         Menu {
+            Button("Clear") { selectedFirewall = "" }
             ForEach(1...5, id: \.self) { number in
                 let firewall = String(format: "FW%02d", number)
                 Button(firewall) {
                     selectedFirewall = firewall
-                    showTrafficFlow = true
                 }
             }
         } label: {
@@ -464,21 +477,6 @@ private struct FirewallMenu: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityLabel("Traffic Flow firewall \(position)")
-        .popover(isPresented: $showTrafficFlow, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Traffic Flow — \(selectedFirewall)").font(.headline)
-                    Spacer()
-                    Button("Close") { showTrafficFlow = false }
-                }
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.secondary.opacity(0.3))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("Traffic Flow area")
-            }
-            .padding(16)
-            .frame(width: 420, height: 260)
-        }
     }
 }
 
@@ -489,6 +487,7 @@ struct NewTicketView: View {
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
     @State private var bodyFontSize = 16
+    @State private var trafficFlow = ["", "", ""]
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
@@ -500,7 +499,7 @@ struct NewTicketView: View {
             return
         }
         do {
-            try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt))
+            try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt, trafficFlow: trafficFlow))
             dismiss()
         } catch { saveError = error.localizedDescription }
     }
@@ -520,7 +519,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
-            TrafficFlowSelector()
+            TrafficFlowSelector(firewalls: $trafficFlow)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -544,6 +543,7 @@ struct EditTicketView: View {
     @State private var priority: Priority
     @State private var richBody: Data?
     @State private var bodyFontSize: Int
+    @State private var trafficFlow: [String]
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText: String
     @State private var saveError: String?
@@ -553,6 +553,7 @@ struct EditTicketView: View {
         _ritm = State(initialValue: note.ritm); _chg = State(initialValue: note.chg); _title = State(initialValue: note.title)
         _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _isImportant = State(initialValue: note.isImportant); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
         _bodyFontSize = State(initialValue: RichNoteEditor.preferredFontSize(from: note.richBody))
+        _trafficFlow = State(initialValue: Array((note.trafficFlow + ["", "", ""]).prefix(3)))
         _createdTimeText = State(initialValue: CreatedTimeInput.format(note.createdAt))
     }
     private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes, excluding: original.id) }
@@ -572,6 +573,7 @@ struct EditTicketView: View {
         updated.priority = priority
         updated.richBody = richBody
         updated.createdAt = createdAt
+        updated.trafficFlow = trafficFlow
         do { try onSave(updated); onClose() }
         catch { saveError = error.localizedDescription }
     }
@@ -595,7 +597,7 @@ struct EditTicketView: View {
                 Text("Local time")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            TrafficFlowSelector()
+            TrafficFlowSelector(firewalls: $trafficFlow)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack {
@@ -624,6 +626,7 @@ struct EditTicketView: View {
             onDirtyChange(true)
         }
         .onChange(of: richBody) { _, _ in onDirtyChange(true) }
+        .onChange(of: trafficFlow) { _, _ in onDirtyChange(true) }
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.17
+
+- Display a 20 pt traffic flow line beneath the firewall selectors and save the selections with each ticket.
+
 ## 1.4.16
 
 - Show three independently selectable firewall menus across the Traffic Flow row.

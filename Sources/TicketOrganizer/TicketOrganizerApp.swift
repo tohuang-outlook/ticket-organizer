@@ -83,13 +83,24 @@ extension TicketNote {
     }
 
     static func trafficFlowSlots(_ firewalls: [String]) -> [String] {
-        Array((firewalls + Array(repeating: "", count: 5)).prefix(5))
+        firewalls + Array(repeating: "", count: max(0, 3 - firewalls.count))
     }
 
     static let zoneOptions = (1...4).map { "zone \($0)" }
 
     static func zoneSlots(_ zones: [[String]]) -> [[String]] {
-        Array((zones.map { Array($0.prefix(2)) } + Array(repeating: [], count: 5)).prefix(5))
+        zones + Array(repeating: [], count: max(0, 3 - zones.count))
+    }
+
+    static func additionalTrafficSteps(_ firewalls: [String], zones: [[String]]) -> [String] {
+        let count = max(firewalls.count, zones.count)
+        guard count > 3 else { return [] }
+        return (3..<count).compactMap { index in
+            let firewall = index < firewalls.count ? firewalls[index] : ""
+            let path = index < zones.count ? zones[index].joined(separator: "--->") : ""
+            guard !firewall.isEmpty || !path.isEmpty else { return nil }
+            return "\(index + 1): " + [firewall, path].filter { !$0.isEmpty }.joined(separator: " · ")
+        }
     }
 
     static func togglingZone(_ zone: String, in selected: [String]) -> [String] {
@@ -471,20 +482,20 @@ private struct TrafficFlowSelector: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Traffic Flow")
             HStack(spacing: 8) {
-                ForEach(1...5, id: \.self) { position in
+                ForEach(1...3, id: \.self) { position in
                     FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1], selectedZones: $zones[position - 1])
                         .frame(maxWidth: .infinity)
                 }
             }
             HStack(spacing: 8) {
-                ForEach(1...5, id: \.self) { position in
+                ForEach(1...3, id: \.self) { position in
                     ZoneMenu(position: position, firewall: firewalls[position - 1], selectedZones: $zones[position - 1])
                         .frame(maxWidth: .infinity)
                 }
             }
-            if let firstSelected = firewalls.firstIndex(where: { !$0.isEmpty }) {
+            if let firstSelected = firewalls.prefix(3).firstIndex(where: { !$0.isEmpty }) {
                 HStack(alignment: .top, spacing: 8) {
-                    ForEach(firewalls.indices, id: \.self) { index in
+                    ForEach(0..<3, id: \.self) { index in
                         Text(TicketNote.deviceGroupPlaceholder(for: firewalls[index]) ?? "")
                             .font(.system(size: 24, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
@@ -493,7 +504,7 @@ private struct TrafficFlowSelector: View {
                     }
                 }
                 HStack(alignment: .top, spacing: 8) {
-                    ForEach(firewalls.indices, id: \.self) { index in
+                    ForEach(0..<3, id: \.self) { index in
                         Text(firewalls[index].isEmpty ? "" : "\(index == firstSelected ? "From" : "to") \(firewalls[index])")
                             .font(.system(size: 26, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
@@ -502,9 +513,9 @@ private struct TrafficFlowSelector: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(TicketNote.trafficFlowDescription(firewalls))
+                .accessibilityLabel(TicketNote.trafficFlowDescription(Array(firewalls.prefix(3))))
                 HStack(alignment: .top, spacing: 8) {
-                    ForEach(firewalls.indices, id: \.self) { index in
+                    ForEach(0..<3, id: \.self) { index in
                         Text(firewalls[index].isEmpty ? "" : zones[index].joined(separator: "--->"))
                             .font(.system(size: 20, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
@@ -512,6 +523,13 @@ private struct TrafficFlowSelector: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+            }
+            let additionalSteps = TicketNote.additionalTrafficSteps(firewalls, zones: zones)
+            if !additionalSteps.isEmpty {
+                Text("Additional saved steps (preserved): " + additionalSteps.joined(separator: "; "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

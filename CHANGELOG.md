@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.25
+
+- Show three firewall and Zone selectors while preserving additional steps saved by earlier versions.
+
 ## 1.4.24
 
 - Display each firewall's zone path in 20 pt bold text.

@@ -14,7 +14,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
 - Warn when an entered RITM already exists, with the matching CHG, status, and title. The warning does not block intentional duplicates.
 - Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
-- Choose FW01 through FW05 independently in the five Traffic Flow menus below Created. Each step appears in 26 pt bold text below its corresponding menu, with a numbered device group placeholder in 24 pt bold above it. The choices are saved with the ticket; use Clear to remove a selection.
+- Choose FW01 through FW05 independently in the three Traffic Flow menus below Created. Each step appears in 26 pt bold text below its corresponding menu, with a numbered device group placeholder in 24 pt bold above it. The choices are saved with the ticket; use Clear to remove a selection. Additional steps saved by older versions remain visible as read-only text and are preserved.
 - After selecting a firewall, use its Zones menu to choose up to two zones in order. The selected path appears in 20 pt bold text below that firewall and is saved with the ticket. Deselect a zone to change the order; changing or clearing the firewall clears its zones.
 - Keep the current text and scroll position visible when changing body font size with Command-period or Command-minus.
 - Use the bottom Smaller/Larger controls to change only highlighted plan text by 2 pt; the controls show the selected text size and prompt you to select text first when nothing is selected.
@@ -87,7 +87,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.24 BUILD_NUMBER=60 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.25 BUILD_NUMBER=61 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -134,7 +134,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.24)
+## Release acceptance gates (1.4.25)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

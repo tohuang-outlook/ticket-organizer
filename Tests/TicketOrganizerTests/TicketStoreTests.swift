@@ -7,8 +7,9 @@ final class TicketStoreTests: XCTestCase {
     func testTrafficFlowDisplaysAndPersistsWithLegacyCompatibility() throws {
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW03", "FW04", "FW05"]), "From FW03 to FW04 to FW05")
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW01", "FW02", "FW03", "FW04", "FW05"]), "From FW01 to FW02 to FW03 to FW04 to FW05")
-        XCTAssertEqual(TicketNote.trafficFlowSlots(["FW03", "FW04", "FW05"]), ["FW03", "FW04", "FW05", "", ""])
-        XCTAssertEqual(TicketNote.zoneSlots([["zone 2", "zone 1"]]), [["zone 2", "zone 1"], [], [], [], []])
+        XCTAssertEqual(TicketNote.trafficFlowSlots(["FW03", "FW04", "FW05"]), ["FW03", "FW04", "FW05"])
+        XCTAssertEqual(TicketNote.trafficFlowSlots(["FW01", "FW02", "FW03", "FW04", "FW05"]), ["FW01", "FW02", "FW03", "FW04", "FW05"])
+        XCTAssertEqual(TicketNote.zoneSlots([["zone 2", "zone 1"]]), [["zone 2", "zone 1"], [], []])
         var selectedZones = TicketNote.togglingZone("zone 2", in: [])
         selectedZones = TicketNote.togglingZone("zone 1", in: selectedZones)
         XCTAssertEqual(selectedZones.joined(separator: "--->"), "zone 2--->zone 1")
@@ -27,11 +28,20 @@ final class TicketStoreTests: XCTestCase {
         let store = TicketStore(url: url)
         var note = makeNote()
         note.trafficFlow = ["FW01", "FW02", "FW03", "FW04", "FW05"]
-        note.firewallZones = [["zone 2", "zone 1"], [], ["zone 3", "zone 4"], [], []]
+        note.firewallZones = [["zone 2", "zone 1"], [], ["zone 3", "zone 4"], ["zone 4", "zone 1"], []]
         try store.add(note)
         let reopened = try XCTUnwrap(TicketStore(url: url).notes.first)
         XCTAssertEqual(reopened.trafficFlow, note.trafficFlow)
         XCTAssertEqual(reopened.firewallZones, note.firewallZones)
+        XCTAssertEqual(TicketNote.additionalTrafficSteps(reopened.trafficFlow, zones: reopened.firewallZones), ["4: FW04 · zone 4--->zone 1", "5: FW05"])
+        var edited = reopened
+        edited.trafficFlow = TicketNote.trafficFlowSlots(edited.trafficFlow)
+        edited.firewallZones = TicketNote.zoneSlots(edited.firewallZones)
+        edited.trafficFlow[0] = "FW03"
+        try store.update(edited)
+        let saved = try XCTUnwrap(TicketStore(url: url).notes.first)
+        XCTAssertEqual(Array(saved.trafficFlow.dropFirst(3)), ["FW04", "FW05"])
+        XCTAssertEqual(saved.firewallZones[3], ["zone 4", "zone 1"])
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(note)) as? [String: Any])
         json.removeValue(forKey: "trafficFlow")
         json.removeValue(forKey: "firewallZones")

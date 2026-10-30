@@ -507,7 +507,7 @@ private struct TrafficFlowSelector: View {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
                         Text(firewalls[index].isEmpty ? "" : "\(index == firstSelected ? "From" : "to") \(displayName(firewalls[index]))")
-                            .font(.system(size: 26, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.leading, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -557,6 +557,7 @@ private struct FirewallMenu: View {
             }
         } label: {
             Text(selectedFirewall.isEmpty ? "Select FW" : (catalog.first { $0.id == selectedFirewall }?.name ?? selectedFirewall))
+                .font(.system(size: 16))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityLabel("Traffic Flow firewall \(position)")

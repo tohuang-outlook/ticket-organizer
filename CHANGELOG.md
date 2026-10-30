@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.28
+
+- Set firewall selection text to 16 pt and the traffic flow path to 22 pt bold.
+
 ## 1.4.27
 
 - Extract the firewall hostname and zone column from PAN-OS `show interface all` output, with a warning that zone names may be truncated.

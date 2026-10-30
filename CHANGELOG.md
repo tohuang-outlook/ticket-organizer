@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.14
+
+- Add a Traffic Flow icon and an empty panel to the note editor.
+
 ## 1.4.13
 
 - Rename the pending approval page title to "Pending Approval".

@@ -408,10 +408,31 @@ private struct SelectionFontSizeControl: View {
 
 private struct PlanEditorHeading: View {
     @ObservedObject var controller: NoteFontSizeController
+    @State private var showTrafficFlow = false
 
     var body: some View {
         HStack {
             Text("Change, Backout, and Validation Plan").font(.headline)
+            Button { showTrafficFlow.toggle() } label: {
+                Image(systemName: "arrow.left.arrow.right")
+            }
+            .help("Traffic Flow")
+            .accessibilityLabel("Traffic Flow")
+            .popover(isPresented: $showTrafficFlow, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Traffic Flow").font(.headline)
+                        Spacer()
+                        Button("Close") { showTrafficFlow = false }
+                    }
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.secondary.opacity(0.3))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Traffic Flow area")
+                }
+                .padding(16)
+                .frame(width: 420, height: 260)
+            }
             Spacer()
             Button { controller.toggleItalic() } label: { Text("I").italic().bold() }
                 .help("Italic (⌘I)")

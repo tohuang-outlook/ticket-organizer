@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.22
+
+- Display device group labels in 24 pt bold text.
+
 ## 1.4.21
 
 - Display device group labels in 20 pt bold text.

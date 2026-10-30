@@ -463,7 +463,7 @@ private struct TrafficFlowSelector: View {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(firewalls.indices, id: \.self) { index in
                         Text(TicketNote.deviceGroupPlaceholder(for: firewalls[index]) ?? "")
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.leading, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)

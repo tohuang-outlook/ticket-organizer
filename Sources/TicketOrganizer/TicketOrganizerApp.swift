@@ -454,11 +454,18 @@ private struct TrafficFlowSelector: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            let description = TicketNote.trafficFlowDescription(firewalls)
-            if !description.isEmpty {
-                Text(description).font(.system(size: 26, weight: .bold))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel(description)
+            if let firstSelected = firewalls.firstIndex(where: { !$0.isEmpty }) {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(firewalls.indices, id: \.self) { index in
+                        Text(firewalls[index].isEmpty ? "" : "\(index == firstSelected ? "From" : "to") \(firewalls[index])")
+                            .font(.system(size: 26, weight: .bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.leading, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(TicketNote.trafficFlowDescription(firewalls))
             }
         }
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.19
+
+- Align each traffic flow step beneath its corresponding firewall selector.
+
 ## 1.4.18
 
 - Expand Traffic Flow to five firewall menus and show the route in 26 pt bold text.

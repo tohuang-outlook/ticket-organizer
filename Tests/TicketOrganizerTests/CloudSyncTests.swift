@@ -160,7 +160,9 @@ final class CloudSyncTests: XCTestCase {
         let cloud = MockTicketCloud()
         let syncA = TicketCloudSync(store: first, transport: cloud, automatic: false)
         let syncB = TicketCloudSync(store: second, transport: cloud, automatic: false)
-        let original = note()
+        var original = note()
+        original.trafficFlow = ["FW01", "FW02"]
+        original.firewallZones = [["zone 2", "zone 1"], ["zone 3", "zone 4"]]
         try first.add(original)
         try syncA.setEnabled(true)
         try syncB.setEnabled(true)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.23
+
+- Add ordered selections of up to two zones per firewall and display each zone path under its firewall.
+
 ## 1.4.22
 
 - Display device group labels in 24 pt bold text.

@@ -8,6 +8,13 @@ final class TicketStoreTests: XCTestCase {
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW03", "FW04", "FW05"]), "From FW03 to FW04 to FW05")
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW01", "FW02", "FW03", "FW04", "FW05"]), "From FW01 to FW02 to FW03 to FW04 to FW05")
         XCTAssertEqual(TicketNote.trafficFlowSlots(["FW03", "FW04", "FW05"]), ["FW03", "FW04", "FW05", "", ""])
+        XCTAssertEqual(TicketNote.zoneSlots([["zone 2", "zone 1"]]), [["zone 2", "zone 1"], [], [], [], []])
+        var selectedZones = TicketNote.togglingZone("zone 2", in: [])
+        selectedZones = TicketNote.togglingZone("zone 1", in: selectedZones)
+        XCTAssertEqual(selectedZones.joined(separator: "--->"), "zone 2--->zone 1")
+        XCTAssertEqual(TicketNote.togglingZone("zone 3", in: selectedZones), selectedZones)
+        selectedZones = TicketNote.togglingZone("zone 2", in: selectedZones)
+        XCTAssertEqual(TicketNote.togglingZone("zone 4", in: selectedZones), ["zone 1", "zone 4"])
         XCTAssertEqual(TicketNote.deviceGroupPlaceholder(for: "FW01"), "(device group 1)")
         XCTAssertEqual(TicketNote.deviceGroupPlaceholder(for: "FW05"), "(device group 5)")
         XCTAssertNil(TicketNote.deviceGroupPlaceholder(for: ""))
@@ -20,13 +27,17 @@ final class TicketStoreTests: XCTestCase {
         let store = TicketStore(url: url)
         var note = makeNote()
         note.trafficFlow = ["FW01", "FW02", "FW03", "FW04", "FW05"]
+        note.firewallZones = [["zone 2", "zone 1"], [], ["zone 3", "zone 4"], [], []]
         try store.add(note)
         let reopened = try XCTUnwrap(TicketStore(url: url).notes.first)
         XCTAssertEqual(reopened.trafficFlow, note.trafficFlow)
+        XCTAssertEqual(reopened.firewallZones, note.firewallZones)
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(note)) as? [String: Any])
         json.removeValue(forKey: "trafficFlow")
+        json.removeValue(forKey: "firewallZones")
         let legacy = try JSONDecoder().decode(TicketNote.self, from: JSONSerialization.data(withJSONObject: json))
         XCTAssertTrue(legacy.trafficFlow.isEmpty)
+        XCTAssertTrue(legacy.firewallZones.isEmpty)
     }
 
     @MainActor

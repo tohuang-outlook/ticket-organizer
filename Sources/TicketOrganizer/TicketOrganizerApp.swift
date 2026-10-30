@@ -65,6 +65,7 @@ struct TicketNote: Identifiable, Codable, Hashable {
     var richBody: Data? = nil
     var createdAt = Date()
     var trafficFlow: [String] = []
+    var firewallZones: [[String]] = []
 }
 
 extension TicketNote {
@@ -85,6 +86,20 @@ extension TicketNote {
         Array((firewalls + Array(repeating: "", count: 5)).prefix(5))
     }
 
+    static let zoneOptions = (1...4).map { "zone \($0)" }
+
+    static func zoneSlots(_ zones: [[String]]) -> [[String]] {
+        Array((zones.map { Array($0.prefix(2)) } + Array(repeating: [], count: 5)).prefix(5))
+    }
+
+    static func togglingZone(_ zone: String, in selected: [String]) -> [String] {
+        guard zoneOptions.contains(zone) else { return selected }
+        var result = selected
+        if let index = result.firstIndex(of: zone) { result.remove(at: index) }
+        else if result.count < 2 { result.append(zone) }
+        return result
+    }
+
     static func deviceGroupPlaceholder(for firewall: String) -> String? {
         guard let index = ["FW01", "FW02", "FW03", "FW04", "FW05"].firstIndex(of: firewall) else { return nil }
         return "(device group \(index + 1))"
@@ -98,7 +113,7 @@ extension TicketNote {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, ritm, chg, title, body, stage, isImportant, priority, owner, updatedAt, richBody, createdAt, trafficFlow
+        case id, ritm, chg, title, body, stage, isImportant, priority, owner, updatedAt, richBody, createdAt, trafficFlow, firewallZones
     }
 
     init(from decoder: Decoder) throws {
@@ -118,6 +133,7 @@ extension TicketNote {
         // Earlier versions recorded only the last modification date.
         createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? updatedAt
         trafficFlow = try values.decodeIfPresent([String].self, forKey: .trafficFlow) ?? []
+        firewallZones = try values.decodeIfPresent([[String]].self, forKey: .firewallZones) ?? []
     }
 }
 
@@ -449,13 +465,20 @@ private struct PlanEditorHeading: View {
 
 private struct TrafficFlowSelector: View {
     @Binding var firewalls: [String]
+    @Binding var zones: [[String]]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Traffic Flow")
             HStack(spacing: 8) {
                 ForEach(1...5, id: \.self) { position in
-                    FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1])
+                    FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1], selectedZones: $zones[position - 1])
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            HStack(spacing: 8) {
+                ForEach(1...5, id: \.self) { position in
+                    ZoneMenu(position: position, firewall: firewalls[position - 1], selectedZones: $zones[position - 1])
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -480,6 +503,15 @@ private struct TrafficFlowSelector: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(TicketNote.trafficFlowDescription(firewalls))
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(firewalls.indices, id: \.self) { index in
+                        Text(firewalls[index].isEmpty ? "" : zones[index].joined(separator: "--->"))
+                            .font(.system(size: 18))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.leading, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
             }
         }
     }
@@ -488,14 +520,20 @@ private struct TrafficFlowSelector: View {
 private struct FirewallMenu: View {
     let position: Int
     @Binding var selectedFirewall: String
+    @Binding var selectedZones: [String]
+
+    private func selectFirewall(_ firewall: String) {
+        if firewall != selectedFirewall { selectedZones = [] }
+        selectedFirewall = firewall
+    }
 
     var body: some View {
         Menu {
-            Button("Clear") { selectedFirewall = "" }
+            Button("Clear") { selectFirewall("") }
             ForEach(1...5, id: \.self) { number in
                 let firewall = String(format: "FW%02d", number)
                 Button(firewall) {
-                    selectedFirewall = firewall
+                    selectFirewall(firewall)
                 }
             }
         } label: {
@@ -503,6 +541,35 @@ private struct FirewallMenu: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityLabel("Traffic Flow firewall \(position)")
+    }
+}
+
+private struct ZoneMenu: View {
+    let position: Int
+    let firewall: String
+    @Binding var selectedZones: [String]
+
+    var body: some View {
+        Menu {
+            Button("Clear zones") { selectedZones = [] }
+                .disabled(selectedZones.isEmpty)
+            ForEach(TicketNote.zoneOptions, id: \.self) { zone in
+                Button {
+                    selectedZones = TicketNote.togglingZone(zone, in: selectedZones)
+                } label: {
+                    if selectedZones.contains(zone) { Label(zone, systemImage: "checkmark") }
+                    else { Text(zone) }
+                }
+                .disabled(selectedZones.count >= 2 && !selectedZones.contains(zone))
+            }
+        } label: {
+            Text("Zones \(selectedZones.count)/2")
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .disabled(firewall.isEmpty)
+        .help("Choose up to two zones in traffic order")
+        .accessibilityLabel("Zones for firewall \(position)")
+        .accessibilityValue(selectedZones.isEmpty ? "None selected" : selectedZones.joined(separator: " to "))
     }
 }
 
@@ -514,6 +581,7 @@ struct NewTicketView: View {
     @State private var richBody: Data?
     @State private var bodyFontSize = 16
     @State private var trafficFlow = TicketNote.trafficFlowSlots([])
+    @State private var firewallZones = TicketNote.zoneSlots([])
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
@@ -525,7 +593,7 @@ struct NewTicketView: View {
             return
         }
         do {
-            try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt, trafficFlow: trafficFlow))
+            try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt, trafficFlow: trafficFlow, firewallZones: firewallZones))
             dismiss()
         } catch { saveError = error.localizedDescription }
     }
@@ -545,7 +613,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
-            TrafficFlowSelector(firewalls: $trafficFlow)
+            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -570,6 +638,7 @@ struct EditTicketView: View {
     @State private var richBody: Data?
     @State private var bodyFontSize: Int
     @State private var trafficFlow: [String]
+    @State private var firewallZones: [[String]]
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText: String
     @State private var saveError: String?
@@ -580,6 +649,7 @@ struct EditTicketView: View {
         _bodyText = State(initialValue: note.body); _stage = State(initialValue: note.stage); _isImportant = State(initialValue: note.isImportant); _priority = State(initialValue: note.priority); _richBody = State(initialValue: note.richBody)
         _bodyFontSize = State(initialValue: RichNoteEditor.preferredFontSize(from: note.richBody))
         _trafficFlow = State(initialValue: TicketNote.trafficFlowSlots(note.trafficFlow))
+        _firewallZones = State(initialValue: TicketNote.zoneSlots(note.firewallZones))
         _createdTimeText = State(initialValue: CreatedTimeInput.format(note.createdAt))
     }
     private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes, excluding: original.id) }
@@ -600,6 +670,7 @@ struct EditTicketView: View {
         updated.richBody = richBody
         updated.createdAt = createdAt
         updated.trafficFlow = trafficFlow
+        updated.firewallZones = firewallZones
         do { try onSave(updated); onClose() }
         catch { saveError = error.localizedDescription }
     }
@@ -623,7 +694,7 @@ struct EditTicketView: View {
                 Text("Local time")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            TrafficFlowSelector(firewalls: $trafficFlow)
+            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack {
@@ -653,6 +724,7 @@ struct EditTicketView: View {
         }
         .onChange(of: richBody) { _, _ in onDirtyChange(true) }
         .onChange(of: trafficFlow) { _, _ in onDirtyChange(true) }
+        .onChange(of: firewallZones) { _, _ in onDirtyChange(true) }
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
 }

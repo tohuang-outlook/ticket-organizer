@@ -16,6 +16,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
 - Firewall selection text uses 16 pt; the firewall path uses 22 pt bold text.
 - Configure firewall names, device groups, available zones, and active status in Ticket Organizer > Settings > Firewalls. FW01–FW05 and their numbered device groups and zones are initial placeholders. Active firewalls appear in the three Traffic Flow menus below Created; each step and its device group appear below its menu. Choices are saved with the ticket; use Clear to remove a selection. Additional steps saved by older versions remain visible as read-only text and are preserved.
+- Use Remove Firewall in a firewall menu to remove a firewall from future selections. Existing ticket details remain available; reactivate the firewall in Settings > Firewalls when needed.
 - Use Import CLI Output in Firewall Settings to extract a hostname and zones from PAN-OS `show interface all`, or explicit `hostname:`, `set deviceconfig system hostname`, and `set zone` lines from one firewall. Interface tables may truncate long zone names, so verify and complete them before saving; device group is entered manually. Pasted CLI text is processed locally and is not saved.
   Supported line examples follow the Palo Alto Networks documentation for [system information](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/use-the-cli/view-settings-and-statistics) and the [PAN-OS CLI command hierarchy](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/cli-command-hierarchy/pan-os-11-2-configure-cli-command-hierarchy).
 - After selecting a firewall, use its Zones menu to choose up to two zones in order. The selected path appears in 20 pt bold text below that firewall and is saved with the ticket. Deselect a zone to change the order; changing or clearing the firewall clears its zones.
@@ -90,7 +91,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.28 BUILD_NUMBER=64 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.29 BUILD_NUMBER=65 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -137,7 +138,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.28)
+## Release acceptance gates (1.4.29)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

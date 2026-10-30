@@ -108,6 +108,30 @@ final class FirewallCatalogTests: XCTestCase {
     }
 
     @MainActor
+    func testRemovingFirewallFromMenusPreservesTicketsAndCanBeReversed() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        var ticket = TicketNote(ritm: "RITM1", chg: "", title: "", body: "", stage: .draft, priority: .low, owner: "")
+        ticket.trafficFlow = ["FW01"]
+        ticket.firewallZones = [["zone 1", "zone 2"]]
+        try store.add(ticket)
+        let original = try XCTUnwrap(store.firewalls.first { $0.id == "FW01" })
+        try store.setFirewallActive(id: original.id, isActive: false)
+        let reopened = TicketStore(url: url)
+        let removed = try XCTUnwrap(reopened.firewalls.first { $0.id == original.id })
+        XCTAssertFalse(removed.isActive)
+        XCTAssertEqual(removed.name, original.name)
+        XCTAssertEqual(removed.deviceGroup, original.deviceGroup)
+        XCTAssertEqual(removed.zones, original.zones)
+        XCTAssertEqual(reopened.notes.first?.trafficFlow, ["FW01"])
+        XCTAssertEqual(reopened.notes.first?.firewallZones, [["zone 1", "zone 2"]])
+        try store.setFirewallActive(id: original.id, isActive: true)
+        XCTAssertTrue(try XCTUnwrap(TicketStore(url: url).firewalls.first { $0.id == original.id }).isActive)
+    }
+
+    @MainActor
     func testBackupRestoresDefaultCatalogAfterLaterChanges() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }

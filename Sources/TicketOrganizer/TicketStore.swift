@@ -33,6 +33,13 @@ final class TicketStore: ObservableObject {
         try commit(next)
     }
 
+    func setFirewallActive(id: String, isActive: Bool) throws {
+        guard var firewall = firewalls.first(where: { $0.id == id }) else { throw FirewallError.missingFirewall }
+        guard firewall.isActive != isActive else { return }
+        firewall.isActive = isActive
+        try saveFirewall(firewall, isNew: false)
+    }
+
     enum FirewallError: LocalizedError {
         case nameRequired, duplicateName, duplicateZone, missingFirewall
         var errorDescription: String? {

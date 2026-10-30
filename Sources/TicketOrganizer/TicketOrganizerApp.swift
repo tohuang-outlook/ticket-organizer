@@ -473,7 +473,11 @@ private struct PlanEditorHeading: View {
 private struct TrafficFlowSelector: View {
     @Binding var firewalls: [String]
     @Binding var zones: [[String]]
-    let catalog: [FirewallDefinition]
+    @ObservedObject var store: TicketStore
+    @State private var firewallToRemove: FirewallDefinition?
+    @State private var removalError: String?
+
+    private var catalog: [FirewallDefinition] { store.firewalls }
 
     private func definition(_ id: String) -> FirewallDefinition? { catalog.first { $0.id == id } }
     private func displayName(_ id: String) -> String { definition(id)?.name ?? id }
@@ -483,7 +487,7 @@ private struct TrafficFlowSelector: View {
             Text("Traffic Flow")
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { position in
-                    FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1], selectedZones: $zones[position - 1], catalog: catalog)
+                    FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1], selectedZones: $zones[position - 1], catalog: catalog, onRemove: { firewallToRemove = $0 })
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -533,6 +537,19 @@ private struct TrafficFlowSelector: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .confirmationDialog("Remove Firewall from Menus?", isPresented: Binding(get: { firewallToRemove != nil }, set: { if !$0 { firewallToRemove = nil } }), presenting: firewallToRemove) { firewall in
+            Button("Remove \(firewall.name)", role: .destructive) {
+                do { try store.setFirewallActive(id: firewall.id, isActive: false) }
+                catch { removalError = error.localizedDescription }
+                firewallToRemove = nil
+            }
+            Button("Cancel", role: .cancel) { firewallToRemove = nil }
+        } message: { firewall in
+            Text("\(firewall.name) will be removed from the firewall menus. Existing tickets keep its details. You can reactivate it in Firewall Settings.")
+        }
+        .alert("Unable to Remove Firewall", isPresented: Binding(get: { removalError != nil }, set: { if !$0 { removalError = nil } })) {
+            Button("OK") { removalError = nil }
+        } message: { Text(removalError ?? "") }
     }
 }
 
@@ -541,6 +558,7 @@ private struct FirewallMenu: View {
     @Binding var selectedFirewall: String
     @Binding var selectedZones: [String]
     let catalog: [FirewallDefinition]
+    let onRemove: (FirewallDefinition) -> Void
 
     private func selectFirewall(_ firewall: String) {
         if firewall != selectedFirewall { selectedZones = [] }
@@ -553,6 +571,14 @@ private struct FirewallMenu: View {
             ForEach(catalog.filter(\.isActive)) { firewall in
                 Button(firewall.name) {
                     selectFirewall(firewall.id)
+                }
+            }
+            if catalog.contains(where: \.isActive) {
+                Divider()
+                Menu("Remove Firewall…") {
+                    ForEach(catalog.filter(\.isActive)) { firewall in
+                        Button(firewall.name, role: .destructive) { onRemove(firewall) }
+                    }
                 }
             }
         } label: {
@@ -635,7 +661,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
-            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, catalog: store.firewalls)
+            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, store: store)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -717,7 +743,7 @@ struct EditTicketView: View {
                 Text("Local time")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, catalog: store.firewalls)
+            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, store: store)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack {

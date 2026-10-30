@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.29
+
+- Allow removing a firewall from the selection menus while retaining existing ticket details and allowing reactivation in settings.
+
 ## 1.4.28
 
 - Set firewall selection text to 16 pt and the traffic flow path to 22 pt bold.

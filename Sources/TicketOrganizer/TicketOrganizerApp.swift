@@ -85,6 +85,11 @@ extension TicketNote {
         Array((firewalls + Array(repeating: "", count: 5)).prefix(5))
     }
 
+    static func deviceGroupPlaceholder(for firewall: String) -> String? {
+        guard let index = ["FW01", "FW02", "FW03", "FW04", "FW05"].firstIndex(of: firewall) else { return nil }
+        return "(device group \(index + 1))"
+    }
+
     static func sortedByCreation(_ notes: [TicketNote], newestFirst: Bool) -> [TicketNote] {
         notes.sorted {
             if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
@@ -455,6 +460,15 @@ private struct TrafficFlowSelector: View {
                 }
             }
             if let firstSelected = firewalls.firstIndex(where: { !$0.isEmpty }) {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(firewalls.indices, id: \.self) { index in
+                        Text(TicketNote.deviceGroupPlaceholder(for: firewalls[index]) ?? "")
+                            .font(.system(size: 16))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.leading, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(firewalls.indices, id: \.self) { index in
                         Text(firewalls[index].isEmpty ? "" : "\(index == firstSelected ? "From" : "to") \(firewalls[index])")

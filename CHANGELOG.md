@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.20
+
+- Show a numbered device group placeholder above each selected firewall in Traffic Flow.
+
 ## 1.4.19
 
 - Align each traffic flow step beneath its corresponding firewall selector.

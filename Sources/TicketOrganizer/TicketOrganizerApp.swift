@@ -575,11 +575,15 @@ private struct TrafficFlowSelector: View {
 }
 
 private struct TrafficFlowsEditor: View {
+    private enum FlowRemoval {
+        case first
+        case additional(UUID)
+    }
     @Binding var firstFirewalls: [String]
     @Binding var firstZones: [[String]]
     @Binding var additionalFlows: [TicketTrafficFlow]
     @ObservedObject var store: TicketStore
-    @State private var flowToRemove: UUID?
+    @State private var flowToRemove: FlowRemoval?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -593,13 +597,14 @@ private struct TrafficFlowsEditor: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 16) {
-                        TrafficFlowSelector(title: "Traffic Flow 1", firewalls: $firstFirewalls, zones: $firstZones, store: store)
+                        TrafficFlowSelector(title: "Traffic Flow 1", firewalls: $firstFirewalls, zones: $firstZones, store: store,
+                                            onRemove: { flowToRemove = .first })
                         ForEach($additionalFlows) { $flow in
                             VStack(alignment: .leading, spacing: 16) {
                                 Divider()
                                 TrafficFlowSelector(title: "Traffic Flow \((additionalFlows.firstIndex(where: { $0.id == flow.id }) ?? 0) + 2)",
                                                     firewalls: $flow.firewalls, zones: $flow.zones, store: store,
-                                                    onRemove: { flowToRemove = flow.id })
+                                                    onRemove: { flowToRemove = .additional(flow.id) })
                             }.id(flow.id)
                         }
                     }
@@ -615,11 +620,24 @@ private struct TrafficFlowsEditor: View {
         }
         .confirmationDialog("Remove this traffic flow?", isPresented: Binding(get: { flowToRemove != nil }, set: { if !$0 { flowToRemove = nil } })) {
             Button("Remove Flow", role: .destructive) {
-                if let id = flowToRemove { additionalFlows.removeAll { $0.id == id } }
+                switch flowToRemove {
+                case .first:
+                    if !additionalFlows.isEmpty {
+                        let next = additionalFlows.removeFirst().normalized()
+                        firstFirewalls = next.firewalls
+                        firstZones = next.zones
+                    } else {
+                        firstFirewalls = TicketNote.trafficFlowSlots([])
+                        firstZones = TicketNote.zoneSlots([])
+                    }
+                case .additional(let id):
+                    additionalFlows.removeAll { $0.id == id }
+                case nil: break
+                }
                 flowToRemove = nil
             }
             Button("Cancel", role: .cancel) { flowToRemove = nil }
-        } message: { Text("The selected flow will be removed when you save this ticket.") }
+        } message: { Text("The selected flow will be removed when you save this ticket. If it is the only flow, its firewall and zone selections will be cleared.") }
     }
 }
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.31
+
+- Allow removing the first traffic flow as well as additional flows.
+
 ## 1.4.30
 
 - Add independent traffic flows to a ticket, each with its own firewall and zone selections.

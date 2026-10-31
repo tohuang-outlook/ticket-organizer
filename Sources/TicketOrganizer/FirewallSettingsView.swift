@@ -9,6 +9,8 @@ private struct FirewallEditRequest: Identifiable {
 struct FirewallSettingsView: View {
     @ObservedObject var store: TicketStore
     @State private var request: FirewallEditRequest?
+    @State private var firewallToDelete: FirewallDefinition?
+    @State private var deleteError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -36,6 +38,7 @@ struct FirewallSettingsView: View {
                         }
                         Spacer()
                         Button("Edit") { request = FirewallEditRequest(firewall: firewall, showCLI: false) }
+                        Button("Delete", role: .destructive) { firewallToDelete = firewall }
                     }
                     .padding(.vertical, 3)
                 }
@@ -48,6 +51,19 @@ struct FirewallSettingsView: View {
         .sheet(item: $request) { request in
             FirewallEditorView(store: store, firewall: request.firewall, startWithCLI: request.showCLI)
         }
+        .confirmationDialog("Delete Firewall?", isPresented: Binding(get: { firewallToDelete != nil }, set: { if !$0 { firewallToDelete = nil } }), presenting: firewallToDelete) { firewall in
+            Button("Delete \(firewall.name)", role: .destructive) {
+                do { try store.deleteFirewall(id: firewall.id) }
+                catch { deleteError = error.localizedDescription }
+                firewallToDelete = nil
+            }
+            Button("Cancel", role: .cancel) { firewallToDelete = nil }
+        } message: { firewall in
+            Text("Delete \(firewall.name) from Firewall Settings? Firewalls used by tickets cannot be deleted; deactivate them instead.")
+        }
+        .alert("Unable to Delete Firewall", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK") { deleteError = nil }
+        } message: { Text(deleteError ?? "") }
     }
 }
 

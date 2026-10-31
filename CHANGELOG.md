@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.32
+
+- Add firewall deletion in settings, protecting firewalls referenced by tickets.
+
 ## 1.4.31
 
 - Allow removing the first traffic flow as well as additional flows.

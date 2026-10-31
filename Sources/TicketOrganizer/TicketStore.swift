@@ -40,14 +40,25 @@ final class TicketStore: ObservableObject {
         try saveFirewall(firewall, isNew: false)
     }
 
+    func deleteFirewall(id: String) throws {
+        guard firewalls.contains(where: { $0.id == id }) else { throw FirewallError.missingFirewall }
+        guard !notes.contains(where: { note in
+            note.trafficFlow.contains(id) || note.additionalTrafficFlows.contains { $0.firewalls.contains(id) }
+        }) else { throw FirewallError.firewallInUse }
+        var next = archive
+        next.firewalls = firewalls.filter { $0.id != id }
+        try commit(next)
+    }
+
     enum FirewallError: LocalizedError {
-        case nameRequired, duplicateName, duplicateZone, missingFirewall
+        case nameRequired, duplicateName, duplicateZone, missingFirewall, firewallInUse
         var errorDescription: String? {
             switch self {
             case .nameRequired: "Enter a firewall name."
             case .duplicateName: "This firewall name is already in use or reserved by an existing firewall."
             case .duplicateZone: "Each zone must have a unique name."
             case .missingFirewall: "This firewall is no longer available. Reopen Firewall Settings and try again."
+            case .firewallInUse: "This firewall is used by a ticket. Deactivate it to remove it from selection menus while keeping the ticket's firewall and zone information."
             }
         }
     }

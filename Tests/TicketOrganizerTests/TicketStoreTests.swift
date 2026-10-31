@@ -4,6 +4,25 @@ import Darwin
 
 final class TicketStoreTests: XCTestCase {
     @MainActor
+    func testDeleteFirewallRejectsReferencedFlowsAndPersistsRemoval() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        var note = makeNote()
+        note.trafficFlow = ["FW01"]
+        note.additionalTrafficFlows = [TicketTrafficFlow(firewalls: ["FW02"])]
+        try store.add(note)
+        XCTAssertThrowsError(try store.deleteFirewall(id: "FW01"))
+        XCTAssertThrowsError(try store.deleteFirewall(id: "FW02"))
+        try store.deleteFirewall(id: "FW03")
+        let reopened = TicketStore(url: url)
+        XCTAssertFalse(reopened.firewalls.contains { $0.id == "FW03" })
+        XCTAssertEqual(reopened.notes.first?.trafficFlow, ["FW01"])
+        XCTAssertEqual(reopened.notes.first?.additionalTrafficFlows.first?.firewalls, ["FW02"])
+    }
+
+    @MainActor
     func testIndependentTrafficFlowsPersistAndPreserveLegacyRoute() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }

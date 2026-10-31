@@ -4,6 +4,43 @@ import Darwin
 
 final class TicketStoreTests: XCTestCase {
     @MainActor
+    func testIndependentTrafficFlowsPersistAndPreserveLegacyRoute() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        var note = makeNote()
+        note.trafficFlow = ["FW01", "FW02", "FW03", "FW04"]
+        note.firewallZones = [["zone 1", "zone 2"], [], [], ["zone 3"]]
+        let second = TicketTrafficFlow(firewalls: ["FW04", "FW05"], zones: [["zone 2", "zone 1"], []])
+        let third = TicketTrafficFlow(firewalls: ["FW02"], zones: [["zone 4"]])
+        note.additionalTrafficFlows = [second, third]
+        try store.add(note)
+        let backup = folder.appendingPathComponent("backup.json")
+        try store.exportBackup(to: backup)
+        var reopened = try XCTUnwrap(TicketStore(url: url).notes.first)
+        XCTAssertEqual(reopened.additionalTrafficFlows, [second, third])
+        XCTAssertEqual(reopened.additionalTrafficFlows[0].normalized().firewalls, ["FW04", "FW05", ""])
+        reopened.additionalTrafficFlows[0].zones[0] = ["zone 1", "zone 2"]
+        reopened.additionalTrafficFlows.removeLast()
+        try store.update(reopened)
+        let saved = try XCTUnwrap(TicketStore(url: url).notes.first)
+        XCTAssertEqual(saved.trafficFlow, note.trafficFlow)
+        XCTAssertEqual(saved.firewallZones, note.firewallZones)
+        XCTAssertEqual(saved.additionalTrafficFlows.count, 1)
+        XCTAssertEqual(saved.additionalTrafficFlows[0].id, second.id)
+        XCTAssertEqual(saved.additionalTrafficFlows[0].zones[0], ["zone 1", "zone 2"])
+        _ = try store.restoreBackup(from: backup)
+        XCTAssertEqual(store.notes.first?.additionalTrafficFlows, [second, third])
+        XCTAssertEqual(store.notes.first?.trafficFlow, note.trafficFlow)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(note)) as? [String: Any])
+        json.removeValue(forKey: "additionalTrafficFlows")
+        let legacy = try JSONDecoder().decode(TicketNote.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertTrue(legacy.additionalTrafficFlows.isEmpty)
+        XCTAssertEqual(legacy.trafficFlow, note.trafficFlow)
+    }
+
+    @MainActor
     func testTrafficFlowDisplaysAndPersistsWithLegacyCompatibility() throws {
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW03", "FW04", "FW05"]), "From FW03 to FW04 to FW05")
         XCTAssertEqual(TicketNote.trafficFlowDescription(["FW01", "FW02", "FW03", "FW04", "FW05"]), "From FW01 to FW02 to FW03 to FW04 to FW05")

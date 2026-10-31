@@ -54,6 +54,19 @@ enum Priority: String, Codable, CaseIterable, Identifiable {
     var color: Color { switch self { case .high: .red; case .medium: .orange; case .low: .green } }
 }
 
+struct TicketTrafficFlow: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var firewalls: [String] = []
+    var zones: [[String]] = []
+
+    func normalized() -> TicketTrafficFlow {
+        var result = self
+        result.firewalls = TicketNote.trafficFlowSlots(firewalls)
+        result.zones = TicketNote.zoneSlots(zones)
+        return result
+    }
+}
+
 struct TicketNote: Identifiable, Codable, Hashable {
     var id = UUID()
     var ritm: String
@@ -69,6 +82,7 @@ struct TicketNote: Identifiable, Codable, Hashable {
     var createdAt = Date()
     var trafficFlow: [String] = []
     var firewallZones: [[String]] = []
+    var additionalTrafficFlows: [TicketTrafficFlow] = []
 }
 
 extension TicketNote {
@@ -120,7 +134,7 @@ extension TicketNote {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, ritm, chg, title, body, stage, isImportant, priority, owner, updatedAt, richBody, createdAt, trafficFlow, firewallZones
+        case id, ritm, chg, title, body, stage, isImportant, priority, owner, updatedAt, richBody, createdAt, trafficFlow, firewallZones, additionalTrafficFlows
     }
 
     init(from decoder: Decoder) throws {
@@ -141,6 +155,7 @@ extension TicketNote {
         createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? updatedAt
         trafficFlow = try values.decodeIfPresent([String].self, forKey: .trafficFlow) ?? []
         firewallZones = try values.decodeIfPresent([[String]].self, forKey: .firewallZones) ?? []
+        additionalTrafficFlows = try values.decodeIfPresent([TicketTrafficFlow].self, forKey: .additionalTrafficFlows) ?? []
     }
 }
 
@@ -471,9 +486,11 @@ private struct PlanEditorHeading: View {
 }
 
 private struct TrafficFlowSelector: View {
+    let title: String
     @Binding var firewalls: [String]
     @Binding var zones: [[String]]
     @ObservedObject var store: TicketStore
+    var onRemove: (() -> Void)? = nil
     @State private var firewallToRemove: FirewallDefinition?
     @State private var removalError: String?
 
@@ -484,7 +501,11 @@ private struct TrafficFlowSelector: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Traffic Flow")
+            HStack {
+                Text(title).fontWeight(.semibold)
+                Spacer()
+                if let onRemove { Button("Remove Flow", role: .destructive, action: onRemove) }
+            }
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { position in
                     FirewallMenu(position: position, selectedFirewall: $firewalls[position - 1], selectedZones: $zones[position - 1], catalog: catalog, onRemove: { firewallToRemove = $0 })
@@ -550,6 +571,55 @@ private struct TrafficFlowSelector: View {
         .alert("Unable to Remove Firewall", isPresented: Binding(get: { removalError != nil }, set: { if !$0 { removalError = nil } })) {
             Button("OK") { removalError = nil }
         } message: { Text(removalError ?? "") }
+    }
+}
+
+private struct TrafficFlowsEditor: View {
+    @Binding var firstFirewalls: [String]
+    @Binding var firstZones: [[String]]
+    @Binding var additionalFlows: [TicketTrafficFlow]
+    @ObservedObject var store: TicketStore
+    @State private var flowToRemove: UUID?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Traffic Flows").font(.headline)
+                Spacer()
+                Button { additionalFlows.append(TicketTrafficFlow().normalized()) } label: {
+                    Label("Add Traffic Flow", systemImage: "plus")
+                }
+            }
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        TrafficFlowSelector(title: "Traffic Flow 1", firewalls: $firstFirewalls, zones: $firstZones, store: store)
+                        ForEach($additionalFlows) { $flow in
+                            VStack(alignment: .leading, spacing: 16) {
+                                Divider()
+                                TrafficFlowSelector(title: "Traffic Flow \((additionalFlows.firstIndex(where: { $0.id == flow.id }) ?? 0) + 2)",
+                                                    firewalls: $flow.firewalls, zones: $flow.zones, store: store,
+                                                    onRemove: { flowToRemove = flow.id })
+                            }.id(flow.id)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(minHeight: 100, maxHeight: 250)
+                .onChange(of: additionalFlows.count) { oldCount, newCount in
+                    if newCount > oldCount, let id = additionalFlows.last?.id {
+                        DispatchQueue.main.async { withAnimation { proxy.scrollTo(id, anchor: .top) } }
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Remove this traffic flow?", isPresented: Binding(get: { flowToRemove != nil }, set: { if !$0 { flowToRemove = nil } })) {
+            Button("Remove Flow", role: .destructive) {
+                if let id = flowToRemove { additionalFlows.removeAll { $0.id == id } }
+                flowToRemove = nil
+            }
+            Button("Cancel", role: .cancel) { flowToRemove = nil }
+        } message: { Text("The selected flow will be removed when you save this ticket.") }
     }
 }
 
@@ -630,6 +700,7 @@ struct NewTicketView: View {
     @State private var bodyFontSize = 16
     @State private var trafficFlow = TicketNote.trafficFlowSlots([])
     @State private var firewallZones = TicketNote.zoneSlots([])
+    @State private var additionalTrafficFlows: [TicketTrafficFlow] = []
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
@@ -641,7 +712,7 @@ struct NewTicketView: View {
             return
         }
         do {
-            try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt, trafficFlow: trafficFlow, firewallZones: firewallZones))
+            try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt, trafficFlow: trafficFlow, firewallZones: firewallZones, additionalTrafficFlows: additionalTrafficFlows))
             dismiss()
         } catch { saveError = error.localizedDescription }
     }
@@ -661,7 +732,7 @@ struct NewTicketView: View {
             }
             Text("Format: yyyy-MM-dd HH:mm:ss · Local time")
                 .font(.caption).foregroundStyle(.secondary)
-            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, store: store)
+            TrafficFlowsEditor(firstFirewalls: $trafficFlow, firstZones: $firewallZones, additionalFlows: $additionalTrafficFlows, store: store)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
             HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
@@ -688,6 +759,7 @@ struct EditTicketView: View {
     @State private var bodyFontSize: Int
     @State private var trafficFlow: [String]
     @State private var firewallZones: [[String]]
+    @State private var additionalTrafficFlows: [TicketTrafficFlow]
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText: String
     @State private var saveError: String?
@@ -699,6 +771,7 @@ struct EditTicketView: View {
         _bodyFontSize = State(initialValue: RichNoteEditor.preferredFontSize(from: note.richBody))
         _trafficFlow = State(initialValue: TicketNote.trafficFlowSlots(note.trafficFlow))
         _firewallZones = State(initialValue: TicketNote.zoneSlots(note.firewallZones))
+        _additionalTrafficFlows = State(initialValue: note.additionalTrafficFlows.map { $0.normalized() })
         _createdTimeText = State(initialValue: CreatedTimeInput.format(note.createdAt))
     }
     private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes, excluding: original.id) }
@@ -720,6 +793,7 @@ struct EditTicketView: View {
         updated.createdAt = createdAt
         updated.trafficFlow = trafficFlow
         updated.firewallZones = firewallZones
+        updated.additionalTrafficFlows = additionalTrafficFlows
         do { try onSave(updated); onClose() }
         catch { saveError = error.localizedDescription }
     }
@@ -743,7 +817,7 @@ struct EditTicketView: View {
                 Text("Local time")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            TrafficFlowSelector(firewalls: $trafficFlow, zones: $firewallZones, store: store)
+            TrafficFlowsEditor(firstFirewalls: $trafficFlow, firstZones: $firewallZones, additionalFlows: $additionalTrafficFlows, store: store)
             PlanEditorHeading(controller: fontSizeController)
             RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 180, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
             HStack {
@@ -774,6 +848,7 @@ struct EditTicketView: View {
         .onChange(of: richBody) { _, _ in onDirtyChange(true) }
         .onChange(of: trafficFlow) { _, _ in onDirtyChange(true) }
         .onChange(of: firewallZones) { _, _ in onDirtyChange(true) }
+        .onChange(of: additionalTrafficFlows) { _, _ in onDirtyChange(true) }
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
 }

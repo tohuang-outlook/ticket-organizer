@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.30
+
+- Add independent traffic flows to a ticket, each with its own firewall and zone selections.
+
 ## 1.4.29
 
 - Allow removing a firewall from the selection menus while retaining existing ticket details and allowing reactivation in settings.

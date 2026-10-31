@@ -163,6 +163,7 @@ final class CloudSyncTests: XCTestCase {
         var original = note()
         original.trafficFlow = ["FW01", "FW02"]
         original.firewallZones = [["zone 2", "zone 1"], ["zone 3", "zone 4"]]
+        original.additionalTrafficFlows = [TicketTrafficFlow(firewalls: ["FW03"], zones: [["zone 4", "zone 2"]])]
         try first.add(original)
         try syncA.setEnabled(true)
         try syncB.setEnabled(true)

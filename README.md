@@ -20,6 +20,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Use Import CLI Output in Firewall Settings to extract a hostname and zones from PAN-OS `show interface all`, or explicit `hostname:`, `set deviceconfig system hostname`, and `set zone` lines from one firewall. Interface tables may truncate long zone names, so verify and complete them before saving; device group is entered manually. Pasted CLI text is processed locally and is not saved.
   Supported line examples follow the Palo Alto Networks documentation for [system information](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/use-the-cli/view-settings-and-statistics) and the [PAN-OS CLI command hierarchy](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/cli-command-hierarchy/pan-os-11-2-configure-cli-command-hierarchy).
 - After selecting a firewall, use its Zones menu to choose up to two zones in order. The selected path appears in 20 pt bold text below that firewall and is saved with the ticket. Deselect a zone to change the order; changing or clearing the firewall clears its zones.
+- Use Add Traffic Flow to add another independent path, or Remove Flow to remove an additional path. Save the ticket to keep changes.
 - Keep the current text and scroll position visible when changing body font size with Command-period or Command-minus.
 - Use the bottom Smaller/Larger controls to change only highlighted plan text by 2 pt; the controls show the selected text size and prompt you to select text first when nothing is selected.
 - Working tickets can also be edited and saved with only RITM while their details are still incomplete.
@@ -62,7 +63,7 @@ Writes are locked across app instances. If another instance or external tool cha
 
 Update every Mac to 1.2.8 or newer before using Completed with iCloud. Older app versions cannot read the Completed workflow value and may pause rather than load the notes. Update every Mac to 1.2.1 or newer before using Closed with iCloud, and to 1.2.2 or newer before using Working.
 
-Update every Mac to 1.4.26 or newer before editing tickets or firewall settings. Older versions may not preserve newer fields or firewall settings when they save data. Firewall settings are stored locally and included in ticket backups; they are not synced by the current iCloud implementation.
+Update every Mac to 1.4.30 or newer before editing tickets or firewall settings. Older versions may not preserve additional traffic flows or firewall settings when they save data. Firewall settings are stored locally and included in ticket backups; they are not synced by the current iCloud implementation.
 
 Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
 
@@ -91,7 +92,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.29 BUILD_NUMBER=65 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.30 BUILD_NUMBER=66 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -138,7 +139,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.29)
+## Release acceptance gates (1.4.30)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

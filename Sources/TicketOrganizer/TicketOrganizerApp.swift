@@ -683,24 +683,65 @@ private struct ZoneMenu: View {
     let firewall: String
     @Binding var selectedZones: [String]
     let availableZones: [String]
+    @State private var isOpen = false
+    @State private var search = ""
+    @FocusState private var searchFocused: Bool
+
+    private var matchingZones: [String] {
+        let zones = availableZones + selectedZones.filter { !availableZones.contains($0) }
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? zones : zones.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
-        Menu {
-            Button("Clear zones") { selectedZones = [] }
-                .disabled(selectedZones.isEmpty)
-            ForEach(availableZones + selectedZones.filter { !availableZones.contains($0) }, id: \.self) { zone in
-                Button {
-                    selectedZones = TicketNote.togglingZone(zone, in: selectedZones)
-                } label: {
-                    if selectedZones.contains(zone) { Label(zone, systemImage: "checkmark") }
-                    else { Text(zone) }
-                }
-                .disabled(selectedZones.count >= 2 && !selectedZones.contains(zone))
+        Button { isOpen.toggle() } label: {
+            HStack {
+                Text("Zones \(selectedZones.count)/2")
+                Spacer()
+                Image(systemName: "chevron.down")
             }
-        } label: {
-            Text("Zones \(selectedZones.count)/2")
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .popover(isPresented: $isOpen, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Search zones", text: $search)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($searchFocused)
+                    .accessibilityLabel("Search zones")
+                HStack {
+                    Text("Select up to two zones in order").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Clear zones") { selectedZones = [] }.disabled(selectedZones.isEmpty)
+                }
+                if matchingZones.isEmpty {
+                    Text("No matching zones").foregroundStyle(.secondary).padding(.vertical, 8)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(matchingZones, id: \.self) { zone in
+                                Button {
+                                    selectedZones = TicketNote.togglingZone(zone, in: selectedZones)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: selectedZones.contains(zone) ? "checkmark.square.fill" : "square")
+                                        Text(zone)
+                                        Spacer()
+                                        if let index = selectedZones.firstIndex(of: zone) { Text("\(index + 1)").foregroundStyle(.secondary) }
+                                    }.contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(selectedZones.count >= 2 && !selectedZones.contains(zone))
+                                .padding(.vertical, 3)
+                            }
+                        }
+                    }.frame(maxHeight: 250)
+                }
+            }
+            .padding(12)
+            .frame(width: 300)
+            .onAppear { search = ""; searchFocused = true }
+        }
+        .onChange(of: firewall) { _, _ in isOpen = false; search = "" }
         .disabled(firewall.isEmpty)
         .help("Choose up to two zones in traffic order")
         .accessibilityLabel("Zones for firewall \(position)")

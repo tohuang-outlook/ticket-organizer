@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.33
+
+- Add searchable zone selection while preserving the order of selected zones.
+
 ## 1.4.32
 
 - Add firewall deletion in settings, protecting firewalls referenced by tickets.

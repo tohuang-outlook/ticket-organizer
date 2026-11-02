@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.34
+
+- Show selected and recently used zones first for each firewall, based on saved tickets.
+
 ## 1.4.33
 
 - Add searchable zone selection while preserving the order of selected zones.

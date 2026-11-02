@@ -99,6 +99,22 @@ extension TicketNote {
         return selected.isEmpty ? "" : "From " + selected.joined(separator: " to ")
     }
 
+    static func recentZones(for firewall: String, in notes: [TicketNote]) -> [String] {
+        guard !firewall.isEmpty else { return [] }
+        var seen = Set<String>()
+        var result: [String] = []
+        func add(_ firewalls: [String], _ zones: [[String]]) {
+            for (index, id) in firewalls.enumerated() where id == firewall && index < zones.count {
+                for zone in zones[index] where seen.insert(zone).inserted { result.append(zone) }
+            }
+        }
+        for note in notes.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            add(note.trafficFlow, note.firewallZones)
+            for flow in note.additionalTrafficFlows { add(flow.firewalls, flow.zones) }
+        }
+        return result
+    }
+
     static func trafficFlowSlots(_ firewalls: [String]) -> [String] {
         firewalls + Array(repeating: "", count: max(0, 3 - firewalls.count))
     }
@@ -514,7 +530,7 @@ private struct TrafficFlowSelector: View {
             }
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { position in
-                    ZoneMenu(position: position, firewall: firewalls[position - 1], selectedZones: $zones[position - 1], availableZones: definition(firewalls[position - 1])?.zones ?? [])
+                    ZoneMenu(position: position, firewall: firewalls[position - 1], selectedZones: $zones[position - 1], availableZones: definition(firewalls[position - 1])?.zones ?? [], recentZones: TicketNote.recentZones(for: firewalls[position - 1], in: store.notes))
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -683,12 +699,15 @@ private struct ZoneMenu: View {
     let firewall: String
     @Binding var selectedZones: [String]
     let availableZones: [String]
+    let recentZones: [String]
     @State private var isOpen = false
     @State private var search = ""
     @FocusState private var searchFocused: Bool
 
     private var matchingZones: [String] {
-        let zones = availableZones + selectedZones.filter { !availableZones.contains($0) }
+        let allZones = availableZones + selectedZones.filter { !availableZones.contains($0) }
+        let preferred = selectedZones + recentZones.filter { !selectedZones.contains($0) }
+        let zones = preferred.filter { allZones.contains($0) } + allZones.filter { !preferred.contains($0) }
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return query.isEmpty ? zones : zones.filter { $0.localizedCaseInsensitiveContains(query) }
     }

@@ -3,6 +3,19 @@ import Darwin
 @testable import TicketOrganizer
 
 final class TicketStoreTests: XCTestCase {
+    func testRecentZonesAreScopedToFirewallAndUseSavedTicketRecency() {
+        var older = makeNote()
+        older.updatedAt = Date(timeIntervalSince1970: 10)
+        older.trafficFlow = ["FW01", "FW02"]
+        older.firewallZones = [["old", "shared"], ["other"]]
+        var newer = makeNote()
+        newer.updatedAt = Date(timeIntervalSince1970: 20)
+        newer.additionalTrafficFlows = [TicketTrafficFlow(firewalls: ["FW01"], zones: [["new", "shared"]])]
+        XCTAssertEqual(TicketNote.recentZones(for: "FW01", in: [older, newer]), ["new", "shared", "old"])
+        XCTAssertEqual(TicketNote.recentZones(for: "FW02", in: [older, newer]), ["other"])
+        XCTAssertTrue(TicketNote.recentZones(for: "", in: [older]).isEmpty)
+    }
+
     @MainActor
     func testDeleteFirewallRejectsReferencedFlowsAndPersistsRemoval() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.36
+
+- Add a Black button for selected plan text.
+
 ## 1.4.35
 
 - Allow selecting traffic flow text and copying a flow's device groups, firewalls, and zones.

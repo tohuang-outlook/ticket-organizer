@@ -494,6 +494,9 @@ private struct PlanEditorHeading: View {
                 .foregroundStyle(.gray)
                 .help("Make selected text gray")
                 .accessibilityLabel("Make text gray")
+            Button("Black") { controller.setTextColor(.black) }
+                .help("Make selected text black")
+                .accessibilityLabel("Make text black")
             Button("Default") { controller.setTextColor(.textColor) }
                 .help("Restore the default text color")
                 .accessibilityLabel("Restore default text color")

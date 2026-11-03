@@ -514,12 +514,28 @@ private struct TrafficFlowSelector: View {
 
     private func definition(_ id: String) -> FirewallDefinition? { catalog.first { $0.id == id } }
     private func displayName(_ id: String) -> String { definition(id)?.name ?? id }
+    private var copyableFlow: String {
+        let selected = Array(firewalls.prefix(3)).enumerated().filter { !$0.element.isEmpty }
+        let blocks = selected.enumerated().map { order, entry in
+            let group = definition(entry.element)?.deviceGroup ?? ""
+            let zone = entry.offset < zones.count ? zones[entry.offset].joined(separator: "--->") : ""
+            return [group.isEmpty ? "" : "(\(group))", "\(order == 0 ? "From" : "to") \(displayName(entry.element))", zone]
+                .filter { !$0.isEmpty }.joined(separator: "\n")
+        }
+        return blocks.joined(separator: "\n\n")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(title).fontWeight(.semibold)
                 Spacer()
+                if !copyableFlow.isEmpty {
+                    Button("Copy Flow") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(copyableFlow, forType: .string)
+                    }.help("Copy the device groups, firewalls, and zones in this flow")
+                }
                 if let onRemove { Button("Remove Flow", role: .destructive, action: onRemove) }
             }
             HStack(spacing: 8) {
@@ -539,6 +555,7 @@ private struct TrafficFlowSelector: View {
                     ForEach(0..<3, id: \.self) { index in
                         let group = definition(firewalls[index])?.deviceGroup ?? ""
                         Text(group.isEmpty ? "" : "(\(group))")
+                            .textSelection(.enabled)
                             .font(.system(size: 24, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.leading, 8)
@@ -548,17 +565,17 @@ private struct TrafficFlowSelector: View {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
                         Text(firewalls[index].isEmpty ? "" : "\(index == firstSelected ? "From" : "to") \(displayName(firewalls[index]))")
+                            .textSelection(.enabled)
                             .font(.system(size: 22, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.leading, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(TicketNote.trafficFlowDescription(Array(firewalls.prefix(3)).map(displayName)))
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
                         Text(firewalls[index].isEmpty ? "" : zones[index].joined(separator: "--->"))
+                            .textSelection(.enabled)
                             .font(.system(size: 20, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.leading, 8)

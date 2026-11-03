@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.35
+
+- Allow selecting traffic flow text and copying a flow's device groups, firewalls, and zones.
+
 ## 1.4.34
 
 - Show selected and recently used zones first for each firewall, based on saved tickets.

@@ -8,7 +8,11 @@ struct TicketOrganizerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = TicketStore()
     var body: some Scene {
-        WindowGroup("Ticket Organizer") { ContentView(store: store).environment(\.locale, Locale(identifier: "en")) }
+        WindowGroup("Ticket Organizer", id: "main") {
+            ContentView(store: store)
+                .environment(\.locale, Locale(identifier: "en"))
+                .modifier(MainWindowReopenHandler())
+        }
             .windowStyle(.titleBar)
             .defaultSize(width: 1180, height: 760)
             .commands {
@@ -26,6 +30,16 @@ struct TicketOrganizerApp: App {
                 FirewallSettingsView(store: store).tabItem { Label("Firewalls", systemImage: "network") }
                 CloudSyncSettingsView(store: store, sync: store.cloudSync).tabItem { Label("iCloud", systemImage: "icloud") }
             }.environment(\.locale, Locale(identifier: "en"))
+        }
+    }
+}
+
+private struct MainWindowReopenHandler: ViewModifier {
+    @Environment(\.openWindow) private var openWindow
+
+    func body(content: Content) -> some View {
+        content.onAppear {
+            (NSApp.delegate as? AppDelegate)?.reopenMainWindow = { openWindow(id: "main") }
         }
     }
 }

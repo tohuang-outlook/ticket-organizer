@@ -2,6 +2,20 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    var reopenMainWindow: (() -> Void)?
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag else { return true }
+        if let minimized = sender.windows.first(where: { $0.isMiniaturized && $0.canBecomeKey }) {
+            minimized.deminiaturize(nil)
+            minimized.makeKeyAndOrderFront(nil)
+        } else {
+            reopenMainWindow?()
+        }
+        sender.activate(ignoringOtherApps: true)
+        return false
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard sender.windows.contains(where: \.isDocumentEdited) else { return .terminateNow }
         let alert = NSAlert()

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.37
+
+- Restore a minimized window or reopen the main window when the Dock icon is clicked.
+
 ## 1.4.36
 
 - Add a Black button for selected plan text.

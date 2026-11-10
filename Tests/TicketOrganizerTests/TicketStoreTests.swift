@@ -191,8 +191,8 @@ final class TicketStoreTests: XCTestCase {
     }
 
     func testWorkflowOrderAndPersistedValuesRoundTrip() throws {
-        XCTAssertEqual(TicketStage.allCases.map(\.shortTitle), ["Draft", "Working", "Pending Approval", "Approved", "Completed", "Important", "Closed"])
-        XCTAssertEqual(TicketStage.allCases.map(\.rawValue), ["draft", "working", "approval", "approved", "completed", "example", "closed"])
+        XCTAssertEqual(TicketStage.allCases.map(\.shortTitle), ["Draft", "Working", "Pending Approval", "Approved", "Completed", "Important", "Close Pending", "Closed"])
+        XCTAssertEqual(TicketStage.allCases.map(\.rawValue), ["draft", "working", "approval", "approved", "completed", "example", "closePending", "closed"])
         for stage in TicketStage.allCases {
             XCTAssertEqual(try JSONDecoder().decode(TicketStage.self, from: JSONEncoder().encode(stage)), stage)
         }
@@ -202,7 +202,9 @@ final class TicketStoreTests: XCTestCase {
         let open = makeNote()
         var closed = makeNote()
         closed.stage = .closed
-        XCTAssertEqual(TicketNote.excludingClosed([open, closed]), [open])
+        var pending = makeNote()
+        pending.stage = .closePending
+        XCTAssertEqual(TicketNote.excludingClosed([open, closed, pending]), [open, pending])
     }
 
     func testImportantMarkerRoundTripsAndLegacyImportantTicketsAreMarked() throws {

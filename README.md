@@ -8,7 +8,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - The ticket editor uses 18 pt text for the RITM, CHG, and note title inputs.
 - The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt; RITM numbers are blue and bold, while CHG numbers use high-contrast primary text with medium weight. Notes shows only the note title; the full body remains available in the editor and search.
 - Sidebar labels and workflow counts use 18 pt.
-- Organize notes into Draft, Working, Pending Approval, Approved, Completed, Important, and Closed. Open Notes lists and counts all tickets except Closed. Mark an open ticket as Important in its editor without changing its workflow status; marked tickets also appear in the Important sidebar collection.
+- Organize notes into Draft, Working, Pending Approval, Approved, Completed, Important, Close Pending, and Closed. Open Notes lists and counts all tickets except Closed, including Close Pending. Mark an open ticket as Important in its editor without changing its workflow status; marked tickets also appear in the Important sidebar collection.
 - Drag a ticket onto a workflow in the sidebar to move it. The target highlights on hover; successful drops save immediately and open the destination list.
 - Type the Created date and time directly when adding a note (`yyyy-MM-dd HH:mm:ss`, local time), or click Now. Invalid dates cannot be saved.
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
@@ -65,6 +65,8 @@ Update every Mac to 1.2.8 or newer before using Completed with iCloud. Older app
 
 Update every Mac to 1.4.30 or newer before editing tickets or firewall settings. Older versions may not preserve additional traffic flows or firewall settings when they save data. Firewall settings are stored locally and included in ticket backups; they are not synced by the current iCloud implementation.
 
+Update every Mac to 1.4.38 or newer before using Close Pending with iCloud. Older versions cannot decode this workflow status and may be unable to load affected tickets.
+
 Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
 
 Older versions did not record creation time. Their last-modified timestamp is used as the initial creation time and preserved on subsequent edits. The original creation time cannot be reconstructed.
@@ -92,7 +94,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.37 BUILD_NUMBER=73 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.38 BUILD_NUMBER=74 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -139,7 +141,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.37)
+## Release acceptance gates (1.4.38)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

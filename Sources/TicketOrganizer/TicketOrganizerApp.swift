@@ -53,12 +53,13 @@ extension Notification.Name {
 enum TicketStage: String, Codable, CaseIterable, Identifiable {
     case draft, working, approval, approved, completed
     case important = "example" // Keep the persisted value so existing tickets migrate without rewriting data.
+    case closePending = "closePending"
     case closed
     var id: String { rawValue }
     var allowsIncompleteDetails: Bool { self == .draft || self == .working }
     var title: String { shortTitle }
-    var shortTitle: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "Pending Approval"; case .approved: "Approved"; case .completed: "Completed"; case .important: "Important"; case .closed: "Closed" } }
-    var color: Color { switch self { case .draft: .secondary; case .working: .blue; case .approval: .orange; case .approved: .green; case .completed: .mint; case .important: .purple; case .closed: .gray } }
+    var shortTitle: String { switch self { case .draft: "Draft"; case .working: "Working"; case .approval: "Pending Approval"; case .approved: "Approved"; case .completed: "Completed"; case .important: "Important"; case .closePending: "Close Pending"; case .closed: "Closed" } }
+    var color: Color { switch self { case .draft: .secondary; case .working: .blue; case .approval: .orange; case .approved: .green; case .completed: .mint; case .important: .purple; case .closePending: .orange; case .closed: .gray } }
 }
 
 enum Priority: String, Codable, CaseIterable, Identifiable {

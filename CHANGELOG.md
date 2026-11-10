@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.38
+
+- Add the Close Pending workflow between Important and Closed.
+
 ## 1.4.37
 
 - Restore a minimized window or reopen the main window when the Dock icon is clicked.

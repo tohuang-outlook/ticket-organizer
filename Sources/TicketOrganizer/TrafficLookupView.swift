@@ -4,12 +4,13 @@ import UniformTypeIdentifiers
 
 struct TrafficLookupView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var inventory = NetworkInventory.shared
+    @ObservedObject var store: TicketStore
     @State private var address = ""
     @State private var importRequest: ImportRequest?
     @State private var error: String?
 
-    private var results: [NetworkRecord]? { NetworkLookup.matches(address, records: inventory.records) }
+    private var records: [NetworkRecord] { (try? store.networkRecords()) ?? [] }
+    private var results: [NetworkRecord]? { NetworkLookup.matches(address, records: records) }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -26,11 +27,11 @@ struct TrafficLookupView: View {
                 Button("Clear") { address = "" }.disabled(address.isEmpty)
             }
             HStack {
-                Text("Interfaces: \(inventory.records.filter { $0.kind == .interface }.count) · Routes: \(inventory.records.filter { $0.kind == .route }.count)")
+                Text("Interfaces: \(records.filter { $0.kind == .interface }.count) · Routes: \(records.filter { $0.kind == .route }.count)")
                 Spacer()
                 Button("Done") { dismiss() }
             }.font(.callout)
-            if let error = inventory.error { Text(error).foregroundStyle(.red) }
+            if (try? store.networkRecords()) == nil { Text("Unable to read the existing network inventory. No data was changed.").foregroundStyle(.red) }
             if address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ContentUnavailableView("Enter an IP address", systemImage: "magnifyingglass", description: Text("Import CSV files, then enter an IPv4 address or subnet to see matching records."))
             } else if let results {
@@ -40,7 +41,7 @@ struct TrafficLookupView: View {
                     List(results) { record in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
-                                Text(record.firewall).font(.headline)
+                                Text(store.firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.headline)
                                 Text(record.kind == .interface ? "Interface match" : "Route match").font(.caption).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
                                 Spacer()
                                 Text("\(record.subnet)").monospaced()
@@ -57,11 +58,11 @@ struct TrafficLookupView: View {
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(20).frame(minWidth: 720, minHeight: 520)
-        .sheet(item: $importRequest) { request in NetworkImportView(inventory: inventory, request: request) }
+        .sheet(item: $importRequest) { request in NetworkImportView(store: store, request: request) }
         .alert("Unable to Import CSV", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
     }
     private func details(_ record: NetworkRecord) -> String {
-        [("Management IP", record.managementIP ?? ""), ("Interface", record.interface), ("Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop)]
+        [("Management IP", store.firewalls.first(where: { $0.id == record.firewallID })?.managementIP ?? record.managementIP ?? ""), ("Interface", record.interface), ("Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop)]
             .filter { !$0.1.isEmpty }.map { "\($0.0): \($0.1)" }.joined(separator: " · ")
     }
     private func chooseFile(_ kind: NetworkRecordKind) {
@@ -87,19 +88,24 @@ private struct ImportRequest: Identifiable {
 }
 private struct NetworkImportView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var inventory: NetworkInventory
+    @ObservedObject var store: TicketStore
     let request: ImportRequest
     @State private var map: NetworkColumnMap
     @State private var firewallName = ""
+    @State private var firewallID = ""
     @State private var managementIP = ""
+    @State private var deviceGroup = ""
+    @State private var excludedZones: Set<String> = []
     @State private var confirmReplace = false
     @State private var error: String?
-    init(inventory: NetworkInventory, request: ImportRequest) {
-        self.inventory = inventory; self.request = request
+    init(store: TicketStore, request: ImportRequest) {
+        self.store = store; self.request = request
         _map = State(initialValue: .suggest(request.table.headers, kind: request.kind))
     }
-    private var report: NetworkImportReport { map.records(from: request.table, kind: request.kind, source: request.source, firewallName: firewallName, managementIP: managementIP) }
-    private var importedNames: [String] { Array(Set(report.records.map(\.firewall))).sorted() }
+    private var report: NetworkImportReport { map.records(from: request.table, kind: request.kind, source: request.source, firewallName: chosenName, managementIP: managementIP) }
+    private var selectedFirewall: FirewallDefinition? { store.firewalls.first { $0.id == firewallID } }
+    private var chosenName: String { selectedFirewall?.name ?? firewallName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var zones: [String] { request.kind == .interface ? map.zoneNames(in: request.table) : [] }
     private var validManagementIP: Bool {
         let value = managementIP.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty || (!value.contains("/") && IPv4Network(value) != nil)
@@ -108,15 +114,21 @@ private struct NetworkImportView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \(request.kind.title) CSV").font(.title2.bold())
             Text("\(request.source) · \(request.table.rows.count) records").foregroundStyle(.secondary)
-            Text("Enter a firewall name for this file, or select a firewall column if the file includes one. An IPv4 CIDR column is required.")
-            HStack { Text("Firewall name"); TextField("Enter firewall name for this file", text: $firewallName).textFieldStyle(.roundedBorder) }
+            Text("Choose the firewall for this file and review the columns and zones before importing.")
+            HStack {
+                Text("Firewall")
+                Picker("Firewall", selection: $firewallID) {
+                    Text("Add New Firewall").tag("")
+                    ForEach(store.firewalls) { firewall in Text(firewall.name).tag(firewall.id) }
+                }.labelsHidden()
+            }
+            if firewallID.isEmpty {
+                HStack { Text("Firewall name"); TextField("Enter firewall name", text: $firewallName).textFieldStyle(.roundedBorder) }
+                HStack { Text("Device Group"); TextField("Optional device group", text: $deviceGroup).textFieldStyle(.roundedBorder) }
+            }
             HStack { Text("Management IP"); TextField("Optional IPv4 address for this file", text: $managementIP).textFieldStyle(.roundedBorder) }
             if !validManagementIP { Text("Enter a valid IPv4 management address without a prefix.").font(.caption).foregroundStyle(.red) }
-            if !managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && firewallName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("Enter a firewall name to associate this management IP with one firewall.").font(.caption).foregroundStyle(.secondary)
-            }
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-                GridRow { Text("Firewall column"); column($map.firewall) }
                 GridRow { Text(request.kind == .interface ? "Address / Subnet *" : "Destination / Subnet *"); column($map.subnet) }
                 GridRow { Text("Interface"); column($map.interface) }
                 GridRow { Text("Zone"); column($map.zone) }
@@ -127,20 +139,48 @@ private struct NetworkImportView: View {
             if !report.skippedRows.isEmpty {
                 Text("Skipped CSV records: \(report.skippedRows.prefix(15).map(String.init).joined(separator: ", "))\(report.skippedRows.count > 15 ? " …" : ""). Check firewall names and IPv4 CIDR values.").font(.caption).foregroundStyle(.secondary)
             }
-            List(report.records.prefix(5)) { record in
-                Text("\(record.firewall) · \(record.subnet) · record \(record.row)")
+            List(report.records) { record in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(record.subnet) · record \(record.row)")
+                    Text([record.interface, record.zone, record.router, record.nextHop].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }.frame(minHeight: 100, maxHeight: 150)
-            Text("Import replaces \(request.kind.title.lowercased()) records for the firewalls in this file; other firewalls are kept. Ticket notes and firewall settings are unaffected.").font(.caption).foregroundStyle(.secondary)
-            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Import") { confirmReplace = true }.buttonStyle(.borderedProminent).disabled((firewallName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (map.firewall < 0 || !managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)) || !validManagementIP || map.subnet < 0 || report.records.isEmpty || inventory.error != nil) }
+            if !zones.isEmpty {
+                Text("Zones found — select those to add").fontWeight(.semibold)
+                ScrollView {
+                    LazyVStack(alignment: .leading) {
+                        ForEach(zones, id: \.self) { zone in
+                            Toggle(zone, isOn: Binding(get: { !excludedZones.contains(zone) }, set: { if $0 { excludedZones.remove(zone) } else { excludedZones.insert(zone) } }))
+                        }
+                    }
+                }.frame(maxHeight: 110)
+                Text("Verify zone names before importing; existing zones are kept.").font(.caption).foregroundStyle(.secondary)
+            }
+            Text("Import replaces \(request.kind.title.lowercased()) records for the selected firewall. Other firewalls and existing zones are kept.").font(.caption).foregroundStyle(.secondary)
+            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Import") { confirmReplace = true }.buttonStyle(.borderedProminent).disabled(chosenName.isEmpty || !validManagementIP || map.subnet < 0 || report.records.isEmpty) }
         }
-        .padding(20).frame(width: 660, height: 670)
+        .padding(20).frame(width: 660, height: 760)
+        .onChange(of: firewallID) { _, id in
+            let selected = store.firewalls.first { $0.id == id }
+            managementIP = selected?.managementIP ?? ""
+            deviceGroup = selected?.deviceGroup ?? ""
+        }
         .confirmationDialog("Replace imported \(request.kind.title.lowercased()) records?", isPresented: $confirmReplace) {
             Button("Replace and Import") {
-                do { try inventory.replace(kind: request.kind, with: report.records); dismiss() }
+                do {
+                    let name = chosenName
+                    var firewall = selectedFirewall ?? FirewallDefinition(id: UUID().uuidString, name: name, deviceGroup: deviceGroup, zones: [], isActive: true)
+                    let address = managementIP.trimmingCharacters(in: .whitespacesAndNewlines)
+                    firewall.managementIP = address.isEmpty ? nil : address
+                    let records = map.records(from: request.table, kind: request.kind, source: request.source, firewallName: name, managementIP: address).records
+                    try store.importNetworkRecords(records, kind: request.kind, firewall: firewall, isNew: selectedFirewall == nil, zones: zones.filter { !excludedZones.contains($0) })
+                    dismiss()
+                }
                 catch { self.error = error.localizedDescription }
             }
             Button("Cancel", role: .cancel) { }
-        } message: { Text("Existing \(request.kind.title.lowercased()) records for \(importedNames.joined(separator: ", ")) will be replaced by \(report.records.count) records. Other firewalls are kept.") }
+        } message: { Text("Existing \(request.kind.title.lowercased()) records for \(chosenName) will be replaced by \(report.records.count) records. Other firewalls are kept.") }
         .alert("Unable to Import", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
     }
     private func column(_ selection: Binding<Int>) -> some View {

@@ -288,7 +288,7 @@ struct ContentView: View {
         } message: { note in
             Text("\(note.ritm) / \(note.chg) will be permanently deleted. This action cannot be undone.")
         }
-        .sheet(isPresented: $showTrafficLookup) { TrafficLookupView() }
+        .sheet(isPresented: $showTrafficLookup) { TrafficLookupView(store: store) }
         .onChange(of: filtered.map(\.id)) { _, ids in
             if let id = selectedID, !ids.contains(id) { selectedID = nil }
         }
@@ -674,7 +674,7 @@ private struct TrafficFlowsEditor: View {
                 }
             }
         }
-        .sheet(isPresented: $showTrafficLookup) { TrafficLookupView() }
+        .sheet(isPresented: $showTrafficLookup) { TrafficLookupView(store: store) }
         .confirmationDialog("Remove this traffic flow?", isPresented: Binding(get: { flowToRemove != nil }, set: { if !$0 { flowToRemove = nil } })) {
             Button("Remove Flow", role: .destructive) {
                 switch flowToRemove {

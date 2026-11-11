@@ -11,12 +11,14 @@ struct FirewallSettingsView: View {
     @State private var request: FirewallEditRequest?
     @State private var firewallToDelete: FirewallDefinition?
     @State private var deleteError: String?
+    @State private var showTrafficLookup = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Firewall Settings").font(.title2.bold())
                 Spacer()
+                Button("Traffic Lookup") { showTrafficLookup = true }
                 Button("Import CLI Output") { request = FirewallEditRequest(firewall: nil, showCLI: true) }
                 Button("Add Firewall") { request = FirewallEditRequest(firewall: nil, showCLI: false) }
                     .buttonStyle(.borderedProminent)
@@ -32,6 +34,12 @@ struct FirewallSettingsView: View {
                                 if !firewall.isActive { Text("Inactive").font(.caption).foregroundStyle(.secondary) }
                             }
                             Text(firewall.deviceGroup.isEmpty ? "No device group" : firewall.deviceGroup)
+                                .font(.caption).foregroundStyle(.secondary)
+                            Text("Management IP: \(firewall.managementIP ?? "Not set")")
+                                .font(.caption).foregroundStyle(.secondary)
+                            let records = (try? store.networkRecords()) ?? []
+                            let matching = records.filter { $0.firewallID == firewall.id || ($0.firewallID == nil && $0.firewall.caseInsensitiveCompare(firewall.name) == .orderedSame) }
+                            Text("Interfaces: \(matching.filter { $0.kind == .interface }.count) · Routes: \(matching.filter { $0.kind == .route }.count)" + (matching.map(\.importedAt).max().map { " · Last imported: \($0.formatted(date: .abbreviated, time: .shortened))" } ?? ""))
                                 .font(.caption).foregroundStyle(.secondary)
                             Text(firewall.zones.isEmpty ? "No zones" : firewall.zones.joined(separator: ", "))
                                 .font(.caption).lineLimit(2).foregroundStyle(.secondary)
@@ -51,6 +59,7 @@ struct FirewallSettingsView: View {
         .sheet(item: $request) { request in
             FirewallEditorView(store: store, firewall: request.firewall, startWithCLI: request.showCLI)
         }
+        .sheet(isPresented: $showTrafficLookup) { TrafficLookupView(store: store) }
         .confirmationDialog("Delete Firewall?", isPresented: Binding(get: { firewallToDelete != nil }, set: { if !$0 { firewallToDelete = nil } }), presenting: firewallToDelete) { firewall in
             Button("Delete \(firewall.name)", role: .destructive) {
                 do { try store.deleteFirewall(id: firewall.id) }
@@ -73,6 +82,7 @@ private struct FirewallEditorView: View {
     let original: FirewallDefinition?
     @State private var name: String
     @State private var deviceGroup: String
+    @State private var managementIP: String
     @State private var zoneText: String
     @State private var isActive: Bool
     @State private var showCLI: Bool
@@ -85,6 +95,7 @@ private struct FirewallEditorView: View {
         original = firewall
         _name = State(initialValue: firewall?.name ?? "")
         _deviceGroup = State(initialValue: firewall?.deviceGroup ?? "")
+        _managementIP = State(initialValue: firewall?.managementIP ?? "")
         _zoneText = State(initialValue: firewall?.zones.joined(separator: "\n") ?? "")
         _isActive = State(initialValue: firewall?.isActive ?? true)
         _showCLI = State(initialValue: startWithCLI)
@@ -111,7 +122,7 @@ private struct FirewallEditorView: View {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let firewall = FirewallDefinition(id: original?.id ?? cleanName, name: cleanName,
                                           deviceGroup: deviceGroup, zones: zoneText.components(separatedBy: .newlines),
-                                          isActive: isActive)
+                                          isActive: isActive, managementIP: managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : managementIP.trimmingCharacters(in: .whitespacesAndNewlines))
         do {
             try store.saveFirewall(firewall, isNew: original == nil)
             dismiss()
@@ -124,6 +135,7 @@ private struct FirewallEditorView: View {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                 GridRow { Text("Firewall Name"); TextField("Firewall name", text: $name) }
                 GridRow { Text("Device Group"); TextField("Device group", text: $deviceGroup) }
+                GridRow { Text("Management IP"); TextField("Optional IPv4 address", text: $managementIP) }
             }
             Toggle("Active", isOn: $isActive)
                 .help("Inactive firewalls remain visible in existing tickets but are not offered for new selections.")
@@ -145,7 +157,7 @@ private struct FirewallEditorView: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save Firewall") { save() }.buttonStyle(.borderedProminent)
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (!managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (managementIP.contains("/") || IPv4Network(managementIP) == nil)))
             }
         }
         .padding(20)

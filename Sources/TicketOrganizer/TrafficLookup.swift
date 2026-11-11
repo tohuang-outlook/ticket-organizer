@@ -87,6 +87,7 @@ struct NetworkRecord: Codable, Identifiable, Equatable {
     var id = UUID()
     var kind: NetworkRecordKind
     var firewall: String
+    var firewallID: String? = nil
     var managementIP: String? = nil
     var subnet: String
     var interface: String
@@ -103,6 +104,16 @@ struct NetworkImportReport {
 }
 struct NetworkColumnMap {
     var firewall: Int = -1, subnet: Int = -1, interface: Int = -1, zone: Int = -1, router: Int = -1, nextHop: Int = -1
+    func zoneNames(in table: CSVTable) -> [String] {
+        guard zone >= 0 else { return [] }
+        var seen = Set<String>()
+        return table.rows.compactMap { row in
+            guard zone < row.count else { return nil }
+            let value = row[zone].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, value != "-", value.caseInsensitiveCompare("N/A") != .orderedSame, seen.insert(value.lowercased()).inserted else { return nil }
+            return value
+        }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
     static func suggest(_ headers: [String], kind: NetworkRecordKind) -> NetworkColumnMap {
         func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
         func find(_ names: [String]) -> Int { names.compactMap { name in headers.firstIndex { norm($0) == norm(name) } }.first ?? -1 }
@@ -128,7 +139,7 @@ struct NetworkLookup {
         let matches = records.filter { IPv4Network($0.subnet)?.contains(target) == true }
         // Retain every interface match, and the longest route matches per firewall and routing context.
         let routes = matches.filter { $0.kind == .route }
-        let best = Dictionary(grouping: routes, by: { $0.firewall.lowercased() + "\u{0}" + $0.router.lowercased() }).values.flatMap { group -> [NetworkRecord] in
+        let best = Dictionary(grouping: routes, by: { ($0.firewallID ?? $0.firewall.lowercased()) + "\u{0}" + $0.router.lowercased() }).values.flatMap { group -> [NetworkRecord] in
             let maxPrefix = group.compactMap { IPv4Network($0.subnet)?.prefix }.max() ?? -1
             return group.filter { IPv4Network($0.subnet)?.prefix == maxPrefix }
         }

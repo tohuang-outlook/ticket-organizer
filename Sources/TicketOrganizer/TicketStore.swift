@@ -13,6 +13,42 @@ final class TicketStore: ObservableObject {
     var onLocalChange: (() -> Void)?
     lazy var cloudSync = TicketCloudSync(store: self)
     var firewalls: [FirewallDefinition] { archive.firewalls ?? FirewallDefinition.placeholders }
+    private var legacyNetworkURL: URL { url.deletingLastPathComponent().appendingPathComponent("network-inventory.json") }
+    func networkRecords() throws -> [NetworkRecord] {
+        if let records = archive.networkRecords { return records }
+        guard FileManager.default.fileExists(atPath: legacyNetworkURL.path) else { return [] }
+        return try JSONDecoder().decode([NetworkRecord].self, from: Data(contentsOf: legacyNetworkURL))
+    }
+
+    func importNetworkRecords(_ imported: [NetworkRecord], kind: NetworkRecordKind, firewall: FirewallDefinition, isNew: Bool, zones: [String]) throws {
+        guard !imported.isEmpty, imported.allSatisfy({ $0.kind == kind }) else { throw FirewallError.invalidImport }
+        var entries = firewalls
+        guard !firewall.id.isEmpty, !firewall.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw FirewallError.nameRequired }
+        guard !entries.contains(where: { $0.id != firewall.id && $0.name.caseInsensitiveCompare(firewall.name) == .orderedSame }) else { throw FirewallError.duplicateName }
+        var merged = firewall
+        var seen = Set(merged.zones.map { $0.lowercased() })
+        for zone in zones.map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) }) where !zone.isEmpty {
+            if seen.insert(zone.lowercased()).inserted { merged.zones.append(zone) }
+        }
+        if isNew {
+            guard !entries.contains(where: { $0.id.caseInsensitiveCompare(firewall.id) == .orderedSame }) else { throw FirewallError.duplicateName }
+            entries.append(merged)
+        } else if let index = entries.firstIndex(where: { $0.id == firewall.id }) { entries[index] = merged }
+        else { throw FirewallError.missingFirewall }
+        let existing = try networkRecords()
+        let retained = existing.filter { record in
+            guard record.kind == kind else { return true }
+            if let id = record.firewallID { return id != firewall.id }
+            return record.firewall.caseInsensitiveCompare(firewall.name) != .orderedSame && record.firewall.caseInsensitiveCompare(firewall.id) != .orderedSame
+        }
+        let linked = imported.map { record in
+            var item = record; item.firewallID = firewall.id; item.firewall = firewall.name; item.managementIP = firewall.managementIP; return item
+        }
+        var next = archive
+        next.firewalls = entries
+        next.networkRecords = retained + linked
+        try commit(next)
+    }
 
     func saveFirewall(_ firewall: FirewallDefinition, isNew: Bool) throws {
         var item = firewall
@@ -51,7 +87,7 @@ final class TicketStore: ObservableObject {
     }
 
     enum FirewallError: LocalizedError {
-        case nameRequired, duplicateName, duplicateZone, missingFirewall, firewallInUse
+        case nameRequired, duplicateName, duplicateZone, missingFirewall, firewallInUse, invalidImport
         var errorDescription: String? {
             switch self {
             case .nameRequired: "Enter a firewall name."
@@ -59,6 +95,7 @@ final class TicketStore: ObservableObject {
             case .duplicateZone: "Each zone must have a unique name."
             case .missingFirewall: "This firewall is no longer available. Reopen Firewall Settings and try again."
             case .firewallInUse: "This firewall is used by a ticket. Deactivate it to remove it from selection menus while keeping the ticket's firewall and zone information."
+            case .invalidImport: "No valid records are available to import."
             }
         }
     }
@@ -155,7 +192,7 @@ final class TicketStore: ObservableObject {
 
     func exportBackup(to destination: URL) throws {
         guard canWrite else { throw StoreError.unreadableFile }
-        let protectedFiles = [url, url.appendingPathExtension("backup"), url.appendingPathExtension("pre-icloud-backup")]
+        let protectedFiles = [url, url.appendingPathExtension("backup"), url.appendingPathExtension("pre-icloud-backup"), legacyNetworkURL]
         guard !protectedFiles.contains(where: { $0.standardizedFileURL == destination.standardizedFileURL }) else {
             throw StoreError.backupDestinationProtected
         }
@@ -163,6 +200,7 @@ final class TicketStore: ObservableObject {
         guard currentData == lastSavedData else { throw StoreError.concurrentChange }
         var backupArchive = archive
         if backupArchive.firewalls == nil { backupArchive.firewalls = FirewallDefinition.placeholders }
+        if backupArchive.networkRecords == nil { backupArchive.networkRecords = try networkRecords() }
         let document = TicketBackupDocument(archive: backupArchive)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -188,6 +226,7 @@ final class TicketStore: ObservableObject {
         // the store's delete-wins rule and prevent deleted tickets from being resurrected.
         var next = archive
         if let firewalls = backup.archive.firewalls { next.firewalls = firewalls }
+        if let networkRecords = backup.archive.networkRecords { next.networkRecords = networkRecords }
         if next.records.isEmpty && next.cloudAccountID == nil {
             next.cloudAccountID = backup.archive.cloudAccountID
             next.syncEnabled = backup.archive.syncEnabled

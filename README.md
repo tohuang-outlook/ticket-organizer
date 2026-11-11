@@ -4,7 +4,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 
 ## Daily use
 
-- Open Traffic Lookup from the main window or a ticket, import interface and route CSVs, enter the firewall name or map a firewall column, optionally enter its management IPv4 address, map the other columns, and search for an IPv4 address or CIDR subnet. Management IP applies to records in that import; enter it for each file where it should appear. Results distinguish interface and route matches and show imported fields, source filename, CSV record number and import time. Imports are stored locally in `network-inventory.json`; they are not included in ticket backups or iCloud sync. Each import replaces records of the same type for the firewalls in that import and keeps records for other firewalls. Missing CIDR prefixes are treated as /32. The lookup does not verify active routes, route metrics, NAT, PBF, topology or the actual forwarding path. For a subnet query, only imported networks containing the entire query are shown.
+- Open Traffic Lookup from the main window, firewall settings or a ticket. Select an existing firewall or add one, map the CSV columns, review records and select zones to merge. Imports replace the same record type for that firewall while preserving other firewalls. Firewall metadata and imported records are stored locally and included in ticket backups, but are not synced through iCloud. A previous `network-inventory.json` is read and retained when the first new import is saved. Results show interface or route matches, source file and import time. Missing CIDR prefixes are treated as /32. Lookup does not verify route status, metrics, NAT, PBF, topology or actual forwarding. A subnet query only matches networks containing the entire query.
 - Click once to select a ticket; double-click to open a movable, resizable editor.
 - The ticket editor uses 18 pt text for the RITM, CHG, and note title inputs.
 - The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt; RITM numbers are blue and bold, while CHG numbers use high-contrast primary text with medium weight. Notes shows only the note title; the full body remains available in the editor and search.
@@ -68,6 +68,8 @@ Update every Mac to 1.4.30 or newer before editing tickets or firewall settings.
 
 Update every Mac to 1.4.38 or newer before using Close Pending with iCloud. Older versions cannot decode this workflow status and may be unable to load affected tickets.
 
+Update all Macs to 1.4.43 before using integrated firewall inventory; older versions may discard inventory or management-IP fields when saving. Firewall settings and network inventory are local and do not sync through iCloud.
+
 Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
 
 Older versions did not record creation time. Their last-modified timestamp is used as the initial creation time and preserved on subsequent edits. The original creation time cannot be reconstructed.
@@ -95,7 +97,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.42 BUILD_NUMBER=78 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.43 BUILD_NUMBER=79 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -142,7 +144,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.42)
+## Release acceptance gates (1.4.43)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

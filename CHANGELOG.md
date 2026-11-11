@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.43
+
+- Link CSV imports to an existing or new firewall in Settings, including management IP and reviewed zones.
+- Preserve previous inventory records during migration and include inventory in ticket backups.
+
 ## 1.4.42
 
 - Add an optional management IPv4 address to firewall CSV imports and lookup results.

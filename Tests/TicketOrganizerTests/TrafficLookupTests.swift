@@ -2,6 +2,33 @@ import XCTest
 @testable import TicketOrganizer
 
 final class TrafficLookupTests: XCTestCase {
+    @MainActor func testImportLinksFirewallMergesZonesAndKeepsLegacyAndBackups() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("tickets.json")
+        let table = try CSVTable(text: "name,zone,ip_addresses\nae1,INSIDE,10.2.0.1/24\nae2,OUTSIDE,\n")
+        let map = NetworkColumnMap.suggest(table.headers, kind: .interface)
+        let imported = map.records(from: table, kind: .interface, source: "sample.csv", firewallName: "FW01").records
+        let unrelated = map.records(from: table, kind: .route, source: "old.csv", firewallName: "FW02").records
+        try JSONEncoder().encode(unrelated).write(to: dir.appendingPathComponent("network-inventory.json"))
+        let store = TicketStore(url: url)
+        var firewall = try XCTUnwrap(store.firewalls.first)
+        firewall.managementIP = "192.0.2.5"
+        try store.importNetworkRecords(imported, kind: .interface, firewall: firewall, isNew: false, zones: map.zoneNames(in: table))
+        let reopened = TicketStore(url: url)
+        XCTAssertEqual(reopened.firewalls.first?.managementIP, "192.0.2.5")
+        XCTAssertTrue(try XCTUnwrap(reopened.firewalls.first).zones.contains("OUTSIDE"))
+        XCTAssertEqual(try reopened.networkRecords().count, 2)
+        XCTAssertEqual(try reopened.networkRecords().first(where: { $0.kind == .interface })?.firewallID, firewall.id)
+        let backup = dir.appendingPathComponent("backup.json")
+        try store.exportBackup(to: backup)
+        let other = TicketStore(url: dir.appendingPathComponent("other.json"))
+        _ = try other.restoreBackup(from: backup)
+        XCTAssertEqual(try other.networkRecords().count, 2)
+        XCTAssertEqual(other.firewalls.first?.managementIP, "192.0.2.5")
+    }
+
     func testCSVQuotedFieldsNewlinesAndMalformedInput() throws {
         let table = try CSVTable(text: "\u{feff}Firewall,Subnet,Zone\r\n\"fw,1\",10.1.0.1/24,\"inside\nzone\"\r\n")
         XCTAssertEqual(table.rows, [["fw,1", "10.1.0.1/24", "inside\nzone"]])

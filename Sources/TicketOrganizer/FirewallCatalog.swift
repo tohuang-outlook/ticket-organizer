@@ -7,6 +7,7 @@ struct FirewallDefinition: Codable, Identifiable, Equatable {
     var deviceGroup: String
     var zones: [String]
     var isActive: Bool
+    var managementIP: String? = nil
 
     static var placeholders: [FirewallDefinition] {
         (1...5).map { number in

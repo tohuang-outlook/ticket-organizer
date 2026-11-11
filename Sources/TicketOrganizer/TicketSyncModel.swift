@@ -47,6 +47,7 @@ struct TicketArchive: Codable {
     var lastSyncAt: Date?
     // Local catalog is included in backups; CloudKit currently syncs ticket records only.
     var firewalls: [FirewallDefinition]?
+    var networkRecords: [NetworkRecord]?
 
     var notes: [TicketNote] { records.values.compactMap(\.note) }
     var pendingRecords: [TicketSyncRecord] { records.values.filter(\.isPending) }

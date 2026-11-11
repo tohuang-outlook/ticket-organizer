@@ -11,7 +11,7 @@ struct TicketOrganizerApp: App {
         WindowGroup("Ticket Organizer", id: "main") {
             ContentView(store: store)
                 .environment(\.locale, Locale(identifier: "en"))
-                .modifier(MainWindowReopenHandler())
+                .modifier(MainWindowReopenHandler(appDelegate: appDelegate))
         }
             .windowStyle(.titleBar)
             .defaultSize(width: 1180, height: 760)
@@ -36,10 +36,11 @@ struct TicketOrganizerApp: App {
 
 private struct MainWindowReopenHandler: ViewModifier {
     @Environment(\.openWindow) private var openWindow
+    let appDelegate: AppDelegate
 
     func body(content: Content) -> some View {
         content.onAppear {
-            (NSApp.delegate as? AppDelegate)?.reopenMainWindow = { openWindow(id: "main") }
+            appDelegate.reopenMainWindow = { openWindow(id: "main") }
         }
     }
 }

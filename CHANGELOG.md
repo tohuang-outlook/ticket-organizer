@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.39
+
+- Correct registration of the main window reopening handler.
+
 ## 1.4.38
 
 - Add the Close Pending workflow between Important and Closed.

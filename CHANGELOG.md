@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.50
+
+- Set Traffic Lookup text and controls to 16 pt.
+
 ## 1.4.49
 
 - Show common firewall candidates with source-side and destination-side match evidence.

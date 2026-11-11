@@ -17,7 +17,7 @@ struct TrafficLookupView: View {
         let destinationResults = NetworkLookup.matches(destinationAddress, records: allRecords)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Traffic Lookup").font(.title2.bold())
+                Text("Traffic Lookup").font(.system(size: 16, weight: .bold))
                 Spacer()
                 Button("Import Interfaces CSV") { chooseFile(.interface) }
                 Button("Import Routes CSV") { chooseFile(.route) }
@@ -28,7 +28,7 @@ struct TrafficLookupView: View {
                 Text("Interfaces: \(allRecords.filter { $0.kind == .interface }.count) · Routes: \(allRecords.filter { $0.kind == .route }.count)")
                 Spacer()
                 Button("Done") { dismiss() }
-            }.font(.callout)
+            }.font(.system(size: 16))
             if (try? store.networkRecords()) == nil { Text("Unable to read the existing network inventory. No data was changed.").foregroundStyle(.red) }
             PossibleTrafficPathView(source: sourceResults, destination: destinationResults, firewalls: store.firewalls)
             HStack(alignment: .top, spacing: 16) {
@@ -37,8 +37,9 @@ struct TrafficLookupView: View {
                 TrafficLookupColumn(title: "Destination IP", address: $destinationAddress, results: destinationResults, firewalls: store.firewalls)
             }
             Text("Source and destination are matched independently; this is not a verified path. Route status, metrics, NAT, PBF, dynamic changes and other devices are not evaluated. An address without a prefix is treated as /32.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 16)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
+        .font(.system(size: 16))
         .padding(20).frame(minWidth: 720, minHeight: 520)
         .sheet(item: $importRequest) { request in NetworkImportView(store: store, request: request) }
         .alert("Unable to Import CSV", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
@@ -71,7 +72,7 @@ private struct PossibleTrafficPathView: View {
         DisclosureGroup(isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Candidates appear in both lookup results. Source matches can include return routes; they do not establish ingress, path order, connectivity or policy approval. Different routing contexts may be unrelated.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 16)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if source == nil || destination == nil {
                     Text("Enter a valid source and destination to see common firewalls.").foregroundStyle(.secondary)
                 } else if candidates.isEmpty {
@@ -91,7 +92,7 @@ private struct PossibleTrafficPathView: View {
                     }.frame(maxHeight: 190)
                 }
             }.padding(.top, 6)
-        } label: { Text("Possible Traffic Path — common firewall candidates").font(.headline) }
+        } label: { Text("Possible Traffic Path — common firewall candidates").font(.system(size: 16, weight: .semibold)) }
     }
     private func evidence(_ title: String, _ records: [NetworkRecord]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -100,8 +101,8 @@ private struct PossibleTrafficPathView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(record.kind == .interface ? "Interface" : "Route"): \(record.subnet)").fontWeight(.medium)
                     Text([record.zone.isEmpty ? "Zone: unknown" : "Zone: \(record.zone)", record.interface.isEmpty ? "Interface: unknown" : "Interface: \(record.interface)", record.router.isEmpty ? "Routing context: unknown" : "Routing context: \(record.router)", record.nextHop.isEmpty ? "" : "Next hop: \(record.nextHop)"].filter { !$0.isEmpty }.joined(separator: " · "))
-                    Text("\(record.source), CSV record \(record.row) · \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
-                }.font(.caption).textSelection(.enabled)
+                    Text("\(record.source), CSV record \(record.row) · \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
+                }.font(.system(size: 16)).textSelection(.enabled)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -114,7 +115,7 @@ private struct TrafficLookupColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
+            Text(title).font(.system(size: 16, weight: .semibold))
             HStack {
                 TextField("IPv4 address or CIDR subnet", text: $address)
                     .textFieldStyle(.roundedBorder)
@@ -131,13 +132,13 @@ private struct TrafficLookupColumn: View {
                     List(results) { record in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
-                                Text(firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.headline)
-                                Text(record.kind == .interface ? "Interface match" : "Route match").font(.caption).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                                Text(firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.system(size: 16, weight: .semibold))
+                                Text(record.kind == .interface ? "Interface match" : "Route match").font(.system(size: 16)).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
                                 Spacer()
                             }
                             Text(record.subnet).monospaced()
-                            Text(details(record)).font(.callout)
-                            Text("Source: \(record.source), CSV record \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
+                            Text(details(record)).font(.system(size: 16))
+                            Text("Source: \(record.source), CSV record \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
                         }.padding(.vertical, 4)
                     }
                 }

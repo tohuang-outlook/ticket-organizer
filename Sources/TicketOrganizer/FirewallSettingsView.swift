@@ -58,7 +58,7 @@ struct FirewallSettingsView: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(20)
-        .frame(width: 650, height: 540)
+        .frame(minWidth: 650, idealWidth: 650, maxWidth: .infinity, minHeight: 400, idealHeight: 540, maxHeight: .infinity)
         .sheet(item: $request) { request in
             FirewallEditorView(store: store, firewall: request.firewall, startWithCLI: request.showCLI)
         }

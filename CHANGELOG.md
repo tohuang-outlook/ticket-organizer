@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.46
+
+- Make the settings window resizable so the firewall list can show more entries.
+
 ## 1.4.45
 
 - Sort firewalls by name in the CSV import selection menu.

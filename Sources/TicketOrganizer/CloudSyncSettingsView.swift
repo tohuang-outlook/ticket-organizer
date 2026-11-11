@@ -42,7 +42,7 @@ struct CloudSyncSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 550, height: 540)
+        .frame(minWidth: 550, idealWidth: 650, maxWidth: .infinity, minHeight: 400, idealHeight: 540, maxHeight: .infinity)
         .alert("iCloud Sync", isPresented: Binding(get: { operationError != nil }, set: { if !$0 { operationError = nil } })) {
             Button("OK") { operationError = nil }
         } message: { Text(operationError ?? "") }

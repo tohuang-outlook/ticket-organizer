@@ -31,6 +31,7 @@ struct TicketOrganizerApp: App {
                 CloudSyncSettingsView(store: store, sync: store.cloudSync).tabItem { Label("iCloud", systemImage: "icloud") }
             }.environment(\.locale, Locale(identifier: "en"))
         }
+        .windowResizability(.contentMinSize)
     }
 }
 

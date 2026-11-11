@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.47
+
+- Enable native window resizing for the settings window.
+
 ## 1.4.46
 
 - Make the settings window resizable so the firewall list can show more entries.

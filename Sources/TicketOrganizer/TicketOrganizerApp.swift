@@ -16,6 +16,10 @@ struct TicketOrganizerApp: App {
             .windowStyle(.titleBar)
             .defaultSize(width: 1180, height: 760)
             .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings…") { appDelegate.openSettingsWindow?() }
+                        .keyboardShortcut(",", modifiers: .command)
+                }
                 CommandGroup(after: .newItem) {
                     Button("New Ticket Note") { NotificationCenter.default.post(name: .newTicket, object: nil) }
                         .keyboardShortcut("n")
@@ -25,12 +29,14 @@ struct TicketOrganizerApp: App {
                     Button("Restore Tickets from Backup…") { NotificationCenter.default.post(name: .restoreTickets, object: nil) }
                 }
             }
-        Settings {
+        Window("Settings", id: "settings") {
             TabView {
                 FirewallSettingsView(store: store).tabItem { Label("Firewalls", systemImage: "network") }
                 CloudSyncSettingsView(store: store, sync: store.cloudSync).tabItem { Label("iCloud", systemImage: "icloud") }
-            }.environment(\.locale, Locale(identifier: "en"))
+            }
+            .environment(\.locale, Locale(identifier: "en"))
         }
+        .defaultSize(width: 650, height: 540)
         .windowResizability(.contentMinSize)
     }
 }
@@ -42,6 +48,7 @@ private struct MainWindowReopenHandler: ViewModifier {
     func body(content: Content) -> some View {
         content.onAppear {
             appDelegate.reopenMainWindow = { openWindow(id: "main") }
+            appDelegate.openSettingsWindow = { openWindow(id: "settings") }
         }
     }
 }

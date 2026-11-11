@@ -51,11 +51,12 @@ struct CloudSyncSettingsView: View {
 
 struct CloudSyncStatusView: View {
     @ObservedObject var sync: TicketCloudSync
+    @Environment(\.openWindow) private var openWindow
     var body: some View {
         HStack(spacing: 6) {
             if sync.isSyncing { ProgressView().controlSize(.mini) }
             Label(sync.status, systemImage: "icloud").font(.caption).foregroundStyle(.secondary)
-            SettingsLink { Text("Settings") }.font(.caption)
+            Button("Settings") { openWindow(id: "settings") }.font(.caption)
         }.help(sync.detail)
     }
 }

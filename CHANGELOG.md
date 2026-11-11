@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.44
+
+- Sort firewalls by name in Firewall Settings.
+
 ## 1.4.43
 
 - Link CSV imports to an existing or new firewall in Settings, including management IP and reviewed zones.

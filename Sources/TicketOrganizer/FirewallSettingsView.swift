@@ -26,7 +26,10 @@ struct FirewallSettingsView: View {
             Text("Configure names, device groups, and available zones. Existing ticket selections stay linked when a firewall is renamed. Existing zone selections are kept when zones change.")
                 .font(.callout).foregroundStyle(.secondary)
             List {
-                ForEach(store.firewalls) { firewall in
+                ForEach(store.firewalls.sorted { left, right in
+                    let order = left.name.localizedStandardCompare(right.name)
+                    return order == .orderedSame ? left.id < right.id : order == .orderedAscending
+                }) { firewall in
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {

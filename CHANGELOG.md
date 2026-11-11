@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.40
+
+- Add local interface and route CSV import and evidence-based IPv4 subnet lookup.
+
 ## 1.4.39
 
 - Correct registration of the main window reopening handler.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.48
+
+- Compare source and destination IPv4 subnet matches side by side in Traffic Lookup.
+
 ## 1.4.47
 
 - Enable native window resizing for the settings window.

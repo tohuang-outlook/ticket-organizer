@@ -4,7 +4,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 
 ## Daily use
 
-- Open Traffic Lookup from the main window, firewall settings or a ticket. Select an existing firewall or add one, map the CSV columns, review records and select zones to merge. Imports replace the same record type for that firewall while preserving other firewalls. Firewall metadata and imported records are stored locally and included in ticket backups, but are not synced through iCloud. A previous `network-inventory.json` is read and retained when the first new import is saved. Results show interface or route matches, source file and import time. Missing CIDR prefixes are treated as /32. Lookup does not verify route status, metrics, NAT, PBF, topology or actual forwarding. A subnet query only matches networks containing the entire query.
+- Open Traffic Lookup from the main window, firewall settings or a ticket. Select an existing firewall or add one, map the CSV columns, review records and select zones to merge. Imports replace the same record type for that firewall while preserving other firewalls. Firewall metadata and imported records are stored locally and included in ticket backups, but are not synced through iCloud. A previous `network-inventory.json` is read and retained when the first new import is saved. Enter source and destination IPv4 addresses or CIDR subnets to view independent interface and route matches side by side, with source file and import time. Missing CIDR prefixes are treated as /32. Lookup does not verify route status, metrics, NAT, PBF, topology or actual forwarding. A subnet query only matches networks containing the entire query.
 - Click once to select a ticket; double-click to open a movable, resizable editor.
 - The ticket editor uses 18 pt text for the RITM, CHG, and note title inputs.
 - The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt; RITM numbers are blue and bold, while CHG numbers use high-contrast primary text with medium weight. Notes shows only the note title; the full body remains available in the editor and search.
@@ -97,7 +97,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.47 BUILD_NUMBER=83 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.48 BUILD_NUMBER=84 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -144,7 +144,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.47)
+## Release acceptance gates (1.4.48)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

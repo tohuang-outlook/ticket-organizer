@@ -5,12 +5,12 @@ import UniformTypeIdentifiers
 struct TrafficLookupView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var store: TicketStore
-    @State private var address = ""
+    @State private var sourceAddress = ""
+    @State private var destinationAddress = ""
     @State private var importRequest: ImportRequest?
     @State private var error: String?
 
     private var records: [NetworkRecord] { (try? store.networkRecords()) ?? [] }
-    private var results: [NetworkRecord]? { NetworkLookup.matches(address, records: records) }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -19,51 +19,25 @@ struct TrafficLookupView: View {
                 Button("Import Interfaces CSV") { chooseFile(.interface) }
                 Button("Import Routes CSV") { chooseFile(.route) }
             }
-            Text("Find a subnet containing an IPv4 address or subnet. Review the imported evidence before using the result.")
+            Text("Compare the imported subnet matches for a source and destination. Review the evidence before using the results.")
                 .foregroundStyle(.secondary)
-            HStack {
-                TextField("IP address or subnet, e.g. 10.1.2.3 or 10.1.2.0/24", text: $address)
-                    .textFieldStyle(.roundedBorder)
-                Button("Clear") { address = "" }.disabled(address.isEmpty)
-            }
             HStack {
                 Text("Interfaces: \(records.filter { $0.kind == .interface }.count) · Routes: \(records.filter { $0.kind == .route }.count)")
                 Spacer()
                 Button("Done") { dismiss() }
             }.font(.callout)
             if (try? store.networkRecords()) == nil { Text("Unable to read the existing network inventory. No data was changed.").foregroundStyle(.red) }
-            if address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                ContentUnavailableView("Enter an IP address", systemImage: "magnifyingglass", description: Text("Import CSV files, then enter an IPv4 address or subnet to see matching records."))
-            } else if let results {
-                if results.isEmpty {
-                    ContentUnavailableView("No matching records", systemImage: "network.slash", description: Text("Check the input and imported data. No match does not mean a subnet or path does not exist."))
-                } else {
-                    List(results) { record in
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Text(store.firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.headline)
-                                Text(record.kind == .interface ? "Interface match" : "Route match").font(.caption).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-                                Spacer()
-                                Text("\(record.subnet)").monospaced()
-                            }
-                            Text(details(record)).font(.callout)
-                            Text("Source: \(record.source), CSV record \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
-                        }.padding(.vertical, 4)
-                    }
-                }
-            } else {
-                ContentUnavailableView("Invalid IPv4 address or subnet", systemImage: "exclamationmark.triangle", description: Text("Enter an IPv4 address or CIDR subnet such as 10.1.2.0/24."))
+            HStack(alignment: .top, spacing: 16) {
+                TrafficLookupColumn(title: "Source IP", address: $sourceAddress, records: records, firewalls: store.firewalls)
+                Divider()
+                TrafficLookupColumn(title: "Destination IP", address: $destinationAddress, records: records, firewalls: store.firewalls)
             }
-            Text("Route matches are the most specific imported entries per firewall and routing context, not a verified forwarding path. Route status, metrics, NAT, PBF, dynamic changes and other devices are not evaluated. An address without a prefix is treated as /32.")
+            Text("Source and destination are matched independently; this is not a verified path. Route status, metrics, NAT, PBF, dynamic changes and other devices are not evaluated. An address without a prefix is treated as /32.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(20).frame(minWidth: 720, minHeight: 520)
         .sheet(item: $importRequest) { request in NetworkImportView(store: store, request: request) }
         .alert("Unable to Import CSV", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
-    }
-    private func details(_ record: NetworkRecord) -> String {
-        [("Management IP", store.firewalls.first(where: { $0.id == record.firewallID })?.managementIP ?? record.managementIP ?? ""), ("Interface", record.interface), ("Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop)]
-            .filter { !$0.1.isEmpty }.map { "\($0.0): \($0.1)" }.joined(separator: " · ")
     }
     private func chooseFile(_ kind: NetworkRecordKind) {
         let panel = NSOpenPanel()
@@ -78,6 +52,51 @@ struct TrafficLookupView: View {
             guard let text = String(data: data, encoding: .utf8) else { throw NSError(domain: "CSV", code: 1, userInfo: [NSLocalizedDescriptionKey: "Save the CSV as UTF-8 and try again."]) }
             importRequest = ImportRequest(kind: kind, source: url.lastPathComponent, table: try CSVTable(text: text))
         } catch { self.error = error.localizedDescription }
+    }
+}
+private struct TrafficLookupColumn: View {
+    let title: String
+    @Binding var address: String
+    let records: [NetworkRecord]
+    let firewalls: [FirewallDefinition]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+            HStack {
+                TextField("IPv4 address or CIDR subnet", text: $address)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel(title)
+                Button("Clear") { address = "" }.disabled(address.isEmpty)
+                    .accessibilityLabel("Clear \(title)")
+            }
+            if address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ContentUnavailableView("Enter \(title)", systemImage: "magnifyingglass", description: Text("Enter an IPv4 address or subnet."))
+            } else if let results = NetworkLookup.matches(address, records: records) {
+                if results.isEmpty {
+                    ContentUnavailableView("No matching records", systemImage: "network.slash", description: Text("Check the input and imported data."))
+                } else {
+                    List(results) { record in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text(firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.headline)
+                                Text(record.kind == .interface ? "Interface match" : "Route match").font(.caption).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                                Spacer()
+                            }
+                            Text(record.subnet).monospaced()
+                            Text(details(record)).font(.callout)
+                            Text("Source: \(record.source), CSV record \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
+                        }.padding(.vertical, 4)
+                    }
+                }
+            } else {
+                ContentUnavailableView("Invalid IPv4 address or subnet", systemImage: "exclamationmark.triangle", description: Text("Use an IPv4 address or CIDR subnet."))
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    private func details(_ record: NetworkRecord) -> String {
+        [("Management IP", firewalls.first(where: { $0.id == record.firewallID })?.managementIP ?? record.managementIP ?? ""), ("Interface", record.interface), ("Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop)]
+            .filter { !$0.1.isEmpty }.map { "\($0.0): \($0.1)" }.joined(separator: " · ")
     }
 }
 private struct ImportRequest: Identifiable {

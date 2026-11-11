@@ -119,7 +119,10 @@ private struct NetworkImportView: View {
                 Text("Firewall")
                 Picker("Firewall", selection: $firewallID) {
                     Text("Add New Firewall").tag("")
-                    ForEach(store.firewalls) { firewall in Text(firewall.name).tag(firewall.id) }
+                    ForEach(store.firewalls.sorted { left, right in
+                        let order = left.name.localizedStandardCompare(right.name)
+                        return order == .orderedSame ? left.id < right.id : order == .orderedAscending
+                    }) { firewall in Text(firewall.name).tag(firewall.id) }
                 }.labelsHidden()
             }
             if firewallID.isEmpty {

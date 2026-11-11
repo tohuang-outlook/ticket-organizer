@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.45
+
+- Sort firewalls by name in the CSV import selection menu.
+
 ## 1.4.44
 
 - Sort firewalls by name in Firewall Settings.

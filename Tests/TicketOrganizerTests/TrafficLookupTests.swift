@@ -2,6 +2,21 @@ import XCTest
 @testable import TicketOrganizer
 
 final class TrafficLookupTests: XCTestCase {
+    func testPossibleFirewallsKeepAllEvidenceWithoutTreatingSameNameAsSameID() throws {
+        func record(_ name: String, _ id: String?, _ zone: String, _ router: String) -> NetworkRecord {
+            NetworkRecord(kind: .route, firewall: name, firewallID: id, subnet: "10.0.0.0/8", interface: "ae1", zone: zone, router: router, nextHop: "192.0.2.1", source: "routes.csv", row: 2, importedAt: Date(timeIntervalSince1970: 1))
+        }
+        let firewall = FirewallDefinition(id: "id-1", name: "FW01", deviceGroup: "", zones: [], isActive: true)
+        let source = [record("old-name", "id-1", "A", "vr1"), record("FW01", nil, "B", "vr2"), record("same", "id-2", "C", "vr1")]
+        let destination = [record("FW01", "id-1", "D", "vr3"), record("same", "id-3", "E", "vr1")]
+        let candidates = NetworkLookup.possibleFirewalls(source: source, destination: destination, firewalls: [firewall])
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertEqual(candidates[0].name, "FW01")
+        XCTAssertEqual(candidates[0].sourceMatches.map(\.zone), ["A", "B"])
+        XCTAssertEqual(candidates[0].destinationMatches.map(\.router), ["vr3"])
+        XCTAssertTrue(NetworkLookup.possibleFirewalls(source: source, destination: [], firewalls: [firewall]).isEmpty)
+    }
+
     @MainActor func testImportLinksFirewallMergesZonesAndKeepsLegacyAndBackups() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }

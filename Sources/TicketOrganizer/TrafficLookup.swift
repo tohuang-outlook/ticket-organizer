@@ -134,6 +134,29 @@ struct NetworkColumnMap {
     }
 }
 struct NetworkLookup {
+    struct Candidate: Identifiable {
+        let id: String
+        let name: String
+        let sourceMatches: [NetworkRecord]
+        let destinationMatches: [NetworkRecord]
+    }
+
+    static func possibleFirewalls(source: [NetworkRecord], destination: [NetworkRecord], firewalls: [FirewallDefinition]) -> [Candidate] {
+        func identity(_ record: NetworkRecord) -> (String, String) {
+            if let id = record.firewallID {
+                return ("id:" + id, firewalls.first(where: { $0.id == id })?.name ?? record.firewall)
+            }
+            let matches = firewalls.filter { $0.name.caseInsensitiveCompare(record.firewall) == .orderedSame || $0.id.caseInsensitiveCompare(record.firewall) == .orderedSame }
+            if matches.count == 1 { return ("id:" + matches[0].id, matches[0].name) }
+            return ("name:" + record.firewall.lowercased(), record.firewall)
+        }
+        let sources = Dictionary(grouping: source, by: { identity($0).0 })
+        let destinations = Dictionary(grouping: destination, by: { identity($0).0 })
+        return sources.keys.compactMap { key in
+            guard let left = sources[key], let first = left.first, let right = destinations[key], !right.isEmpty else { return nil }
+            return Candidate(id: key, name: identity(first).1, sourceMatches: left, destinationMatches: right)
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
     static func matches(_ input: String, records: [NetworkRecord]) -> [NetworkRecord]? {
         guard let target = IPv4Network(input) else { return nil }
         let matches = records.filter { IPv4Network($0.subnet)?.contains(target) == true }

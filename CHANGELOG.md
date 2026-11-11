@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.49
+
+- Show common firewall candidates with source-side and destination-side match evidence.
+
 ## 1.4.48
 
 - Compare source and destination IPv4 subnet matches side by side in Traffic Lookup.

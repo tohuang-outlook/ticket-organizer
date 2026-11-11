@@ -12,6 +12,9 @@ struct TrafficLookupView: View {
 
     private var records: [NetworkRecord] { (try? store.networkRecords()) ?? [] }
     var body: some View {
+        let allRecords = records
+        let sourceResults = NetworkLookup.matches(sourceAddress, records: allRecords)
+        let destinationResults = NetworkLookup.matches(destinationAddress, records: allRecords)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Traffic Lookup").font(.title2.bold())
@@ -22,15 +25,16 @@ struct TrafficLookupView: View {
             Text("Compare the imported subnet matches for a source and destination. Review the evidence before using the results.")
                 .foregroundStyle(.secondary)
             HStack {
-                Text("Interfaces: \(records.filter { $0.kind == .interface }.count) · Routes: \(records.filter { $0.kind == .route }.count)")
+                Text("Interfaces: \(allRecords.filter { $0.kind == .interface }.count) · Routes: \(allRecords.filter { $0.kind == .route }.count)")
                 Spacer()
                 Button("Done") { dismiss() }
             }.font(.callout)
             if (try? store.networkRecords()) == nil { Text("Unable to read the existing network inventory. No data was changed.").foregroundStyle(.red) }
+            PossibleTrafficPathView(source: sourceResults, destination: destinationResults, firewalls: store.firewalls)
             HStack(alignment: .top, spacing: 16) {
-                TrafficLookupColumn(title: "Source IP", address: $sourceAddress, records: records, firewalls: store.firewalls)
+                TrafficLookupColumn(title: "Source IP", address: $sourceAddress, results: sourceResults, firewalls: store.firewalls)
                 Divider()
-                TrafficLookupColumn(title: "Destination IP", address: $destinationAddress, records: records, firewalls: store.firewalls)
+                TrafficLookupColumn(title: "Destination IP", address: $destinationAddress, results: destinationResults, firewalls: store.firewalls)
             }
             Text("Source and destination are matched independently; this is not a verified path. Route status, metrics, NAT, PBF, dynamic changes and other devices are not evaluated. An address without a prefix is treated as /32.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -54,10 +58,58 @@ struct TrafficLookupView: View {
         } catch { self.error = error.localizedDescription }
     }
 }
+private struct PossibleTrafficPathView: View {
+    let source: [NetworkRecord]?
+    let destination: [NetworkRecord]?
+    let firewalls: [FirewallDefinition]
+    @State private var expanded = true
+    private var candidates: [NetworkLookup.Candidate] {
+        guard let source, let destination else { return [] }
+        return NetworkLookup.possibleFirewalls(source: source, destination: destination, firewalls: firewalls)
+    }
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Candidates appear in both lookup results. Source matches can include return routes; they do not establish ingress, path order, connectivity or policy approval. Different routing contexts may be unrelated.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if source == nil || destination == nil {
+                    Text("Enter a valid source and destination to see common firewalls.").foregroundStyle(.secondary)
+                } else if candidates.isEmpty {
+                    Text("No common firewalls found in the imported matches. This does not establish that a path is absent.").foregroundStyle(.secondary)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(candidates) { candidate in
+                                DisclosureGroup("\(candidate.name) — \(candidate.sourceMatches.count) source / \(candidate.destinationMatches.count) destination matches") {
+                                    HStack(alignment: .top, spacing: 16) {
+                                        evidence("Source-side matches", candidate.sourceMatches)
+                                        evidence("Destination-side matches", candidate.destinationMatches)
+                                    }
+                                }
+                            }
+                        }
+                    }.frame(maxHeight: 190)
+                }
+            }.padding(.top, 6)
+        } label: { Text("Possible Traffic Path — common firewall candidates").font(.headline) }
+    }
+    private func evidence(_ title: String, _ records: [NetworkRecord]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).fontWeight(.semibold)
+            ForEach(records) { record in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(record.kind == .interface ? "Interface" : "Route"): \(record.subnet)").fontWeight(.medium)
+                    Text([record.zone.isEmpty ? "Zone: unknown" : "Zone: \(record.zone)", record.interface.isEmpty ? "Interface: unknown" : "Interface: \(record.interface)", record.router.isEmpty ? "Routing context: unknown" : "Routing context: \(record.router)", record.nextHop.isEmpty ? "" : "Next hop: \(record.nextHop)"].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text("\(record.source), CSV record \(record.row) · \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
+                }.font(.caption).textSelection(.enabled)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
 private struct TrafficLookupColumn: View {
     let title: String
     @Binding var address: String
-    let records: [NetworkRecord]
+    let results: [NetworkRecord]?
     let firewalls: [FirewallDefinition]
 
     var body: some View {
@@ -72,7 +124,7 @@ private struct TrafficLookupColumn: View {
             }
             if address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ContentUnavailableView("Enter \(title)", systemImage: "magnifyingglass", description: Text("Enter an IPv4 address or subnet."))
-            } else if let results = NetworkLookup.matches(address, records: records) {
+            } else if let results {
                 if results.isEmpty {
                     ContentUnavailableView("No matching records", systemImage: "network.slash", description: Text("Check the input and imported data."))
                 } else {

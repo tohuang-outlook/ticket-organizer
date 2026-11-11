@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.41
+
+- Allow entering a firewall name for CSV imports and retain records for other firewalls.
+- Recognize interface exports with name, virtual_router, zone and ip_addresses columns.
+
 ## 1.4.40
 
 - Add local interface and route CSV import and evidence-based IPv4 subnet lookup.

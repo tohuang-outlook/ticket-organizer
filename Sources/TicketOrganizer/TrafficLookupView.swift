@@ -90,20 +90,23 @@ private struct NetworkImportView: View {
     @ObservedObject var inventory: NetworkInventory
     let request: ImportRequest
     @State private var map: NetworkColumnMap
+    @State private var firewallName = ""
     @State private var confirmReplace = false
     @State private var error: String?
     init(inventory: NetworkInventory, request: ImportRequest) {
         self.inventory = inventory; self.request = request
         _map = State(initialValue: .suggest(request.table.headers, kind: request.kind))
     }
-    private var report: NetworkImportReport { map.records(from: request.table, kind: request.kind, source: request.source) }
+    private var report: NetworkImportReport { map.records(from: request.table, kind: request.kind, source: request.source, firewallName: firewallName) }
+    private var importedNames: [String] { Array(Set(report.records.map(\.firewall))).sorted() }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \(request.kind.title) CSV").font(.title2.bold())
             Text("\(request.source) · \(request.table.rows.count) records").foregroundStyle(.secondary)
-            Text("Select the columns that contain each field. The firewall and IPv4 CIDR columns are required.")
+            Text("Enter a firewall name for this file, or select a firewall column if the file includes one. An IPv4 CIDR column is required.")
+            HStack { Text("Firewall name"); TextField("Enter firewall name for this file", text: $firewallName).textFieldStyle(.roundedBorder) }
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-                GridRow { Text("Firewall *"); column($map.firewall) }
+                GridRow { Text("Firewall column"); column($map.firewall) }
                 GridRow { Text(request.kind == .interface ? "Address / Subnet *" : "Destination / Subnet *"); column($map.subnet) }
                 GridRow { Text("Interface"); column($map.interface) }
                 GridRow { Text("Zone"); column($map.zone) }
@@ -117,17 +120,17 @@ private struct NetworkImportView: View {
             List(report.records.prefix(5)) { record in
                 Text("\(record.firewall) · \(record.subnet) · record \(record.row)")
             }.frame(minHeight: 100, maxHeight: 150)
-            Text("Import replaces the previously imported \(request.kind.title.lowercased()) records on this Mac. Ticket notes and firewall settings are unaffected.").font(.caption).foregroundStyle(.secondary)
-            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Import") { confirmReplace = true }.buttonStyle(.borderedProminent).disabled(map.firewall < 0 || map.subnet < 0 || report.records.isEmpty || inventory.error != nil) }
+            Text("Import replaces \(request.kind.title.lowercased()) records for the firewalls in this file; other firewalls are kept. Ticket notes and firewall settings are unaffected.").font(.caption).foregroundStyle(.secondary)
+            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Import") { confirmReplace = true }.buttonStyle(.borderedProminent).disabled((firewallName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && map.firewall < 0) || map.subnet < 0 || report.records.isEmpty || inventory.error != nil) }
         }
-        .padding(20).frame(width: 660, height: 570)
+        .padding(20).frame(width: 660, height: 620)
         .confirmationDialog("Replace imported \(request.kind.title.lowercased()) records?", isPresented: $confirmReplace) {
             Button("Replace and Import") {
                 do { try inventory.replace(kind: request.kind, with: report.records); dismiss() }
                 catch { self.error = error.localizedDescription }
             }
             Button("Cancel", role: .cancel) { }
-        } message: { Text("The previous \(request.kind.title.lowercased()) import will be replaced by \(report.records.count) records.") }
+        } message: { Text("Existing \(request.kind.title.lowercased()) records for \(importedNames.joined(separator: ", ")) will be replaced by \(report.records.count) records. Other firewalls are kept.") }
         .alert("Unable to Import", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
     }
     private func column(_ selection: Binding<Int>) -> some View {

@@ -105,15 +105,17 @@ struct NetworkColumnMap {
     static func suggest(_ headers: [String], kind: NetworkRecordKind) -> NetworkColumnMap {
         func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
         func find(_ names: [String]) -> Int { names.compactMap { name in headers.firstIndex { norm($0) == norm(name) } }.first ?? -1 }
-        return NetworkColumnMap(firewall: find(["firewall", "firewall name", "hostname", "device", "device name"]), subnet: find(kind == .interface ? ["subnet", "network", "ip address", "address", "ip"] : ["destination", "destination subnet", "subnet", "network", "prefix"]), interface: find(["interface", "interface name", "egress interface"]), zone: find(["zone", "security zone"]), router: find(["virtual router", "virtual-router", "vr", "vsys", "routing instance"]), nextHop: find(["next hop", "nexthop", "gateway"]))
+        return NetworkColumnMap(firewall: find(["firewall", "firewall name", "hostname", "device", "device name"]), subnet: find(kind == .interface ? ["subnet", "network", "ip addresses", "ip address", "address", "ip"] : ["destination", "destination subnet", "subnet", "network", "prefix"]), interface: find(kind == .interface ? ["interface", "interface name", "name"] : ["interface", "interface name", "egress interface"]), zone: find(["zone", "security zone"]), router: find(["virtual router", "virtual-router", "vr", "vsys", "routing instance"]), nextHop: find(["next hop", "nexthop", "gateway"]))
     }
-    func records(from table: CSVTable, kind: NetworkRecordKind, source: String, now: Date = Date()) -> NetworkImportReport {
+    func records(from table: CSVTable, kind: NetworkRecordKind, source: String, firewallName: String = "", now: Date = Date()) -> NetworkImportReport {
         var output: [NetworkRecord] = [], skipped: [Int] = []
         func value(_ row: [String], _ index: Int) -> String { index >= 0 && index < row.count ? row[index].trimmingCharacters(in: .whitespacesAndNewlines) : "" }
         for (index, row) in table.rows.enumerated() {
-            let firewallName = value(row, firewall), subnetText = value(row, subnet)
-            guard !firewallName.isEmpty, IPv4Network(subnetText) != nil else { skipped.append(index + 2); continue }
-            output.append(NetworkRecord(kind: kind, firewall: firewallName, subnet: subnetText, interface: value(row, interface), zone: value(row, zone), router: value(row, router), nextHop: value(row, nextHop), source: source, row: index + 2, importedAt: now))
+            let manualName = firewallName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rowName = manualName.isEmpty ? value(row, firewall) : manualName
+            let subnetText = value(row, subnet)
+            guard !rowName.isEmpty, IPv4Network(subnetText) != nil else { skipped.append(index + 2); continue }
+            output.append(NetworkRecord(kind: kind, firewall: rowName, subnet: subnetText, interface: value(row, interface), zone: value(row, zone), router: value(row, router), nextHop: value(row, nextHop), source: source, row: index + 2, importedAt: now))
         }
         return NetworkImportReport(records: output, skippedRows: skipped)
     }
@@ -147,7 +149,8 @@ struct NetworkLookup {
     }
     func replace(kind: NetworkRecordKind, with imported: [NetworkRecord]) throws {
         guard error == nil else { throw NSError(domain: "NetworkInventory", code: 1, userInfo: [NSLocalizedDescriptionKey: "Network inventory could not be opened; import is disabled to protect the existing file."]) }
-        let next = records.filter { $0.kind != kind } + imported
+        let importedNames = Set(imported.map { $0.firewall.lowercased() })
+        let next = records.filter { $0.kind != kind || !importedNames.contains($0.firewall.lowercased()) } + imported
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(next).write(to: url, options: .atomic)
         records = next

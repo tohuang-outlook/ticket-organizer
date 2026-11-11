@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.42
+
+- Add an optional management IPv4 address to firewall CSV imports and lookup results.
+
 ## 1.4.41
 
 - Allow entering a firewall name for CSV imports and retain records for other firewalls.

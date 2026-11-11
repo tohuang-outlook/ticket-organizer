@@ -87,6 +87,7 @@ struct NetworkRecord: Codable, Identifiable, Equatable {
     var id = UUID()
     var kind: NetworkRecordKind
     var firewall: String
+    var managementIP: String? = nil
     var subnet: String
     var interface: String
     var zone: String
@@ -107,7 +108,7 @@ struct NetworkColumnMap {
         func find(_ names: [String]) -> Int { names.compactMap { name in headers.firstIndex { norm($0) == norm(name) } }.first ?? -1 }
         return NetworkColumnMap(firewall: find(["firewall", "firewall name", "hostname", "device", "device name"]), subnet: find(kind == .interface ? ["subnet", "network", "ip addresses", "ip address", "address", "ip"] : ["destination", "destination subnet", "subnet", "network", "prefix"]), interface: find(kind == .interface ? ["interface", "interface name", "name"] : ["interface", "interface name", "egress interface"]), zone: find(["zone", "security zone"]), router: find(["virtual router", "virtual-router", "vr", "vsys", "routing instance"]), nextHop: find(["next hop", "nexthop", "gateway"]))
     }
-    func records(from table: CSVTable, kind: NetworkRecordKind, source: String, firewallName: String = "", now: Date = Date()) -> NetworkImportReport {
+    func records(from table: CSVTable, kind: NetworkRecordKind, source: String, firewallName: String = "", managementIP: String = "", now: Date = Date()) -> NetworkImportReport {
         var output: [NetworkRecord] = [], skipped: [Int] = []
         func value(_ row: [String], _ index: Int) -> String { index >= 0 && index < row.count ? row[index].trimmingCharacters(in: .whitespacesAndNewlines) : "" }
         for (index, row) in table.rows.enumerated() {
@@ -115,7 +116,8 @@ struct NetworkColumnMap {
             let rowName = manualName.isEmpty ? value(row, firewall) : manualName
             let subnetText = value(row, subnet)
             guard !rowName.isEmpty, IPv4Network(subnetText) != nil else { skipped.append(index + 2); continue }
-            output.append(NetworkRecord(kind: kind, firewall: rowName, subnet: subnetText, interface: value(row, interface), zone: value(row, zone), router: value(row, router), nextHop: value(row, nextHop), source: source, row: index + 2, importedAt: now))
+            let management = managementIP.trimmingCharacters(in: .whitespacesAndNewlines)
+            output.append(NetworkRecord(kind: kind, firewall: rowName, managementIP: management.isEmpty ? nil : management, subnet: subnetText, interface: value(row, interface), zone: value(row, zone), router: value(row, router), nextHop: value(row, nextHop), source: source, row: index + 2, importedAt: now))
         }
         return NetworkImportReport(records: output, skippedRows: skipped)
     }

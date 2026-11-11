@@ -61,7 +61,7 @@ struct TrafficLookupView: View {
         .alert("Unable to Import CSV", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
     }
     private func details(_ record: NetworkRecord) -> String {
-        [("Interface", record.interface), ("Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop)]
+        [("Management IP", record.managementIP ?? ""), ("Interface", record.interface), ("Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop)]
             .filter { !$0.1.isEmpty }.map { "\($0.0): \($0.1)" }.joined(separator: " · ")
     }
     private func chooseFile(_ kind: NetworkRecordKind) {
@@ -91,20 +91,30 @@ private struct NetworkImportView: View {
     let request: ImportRequest
     @State private var map: NetworkColumnMap
     @State private var firewallName = ""
+    @State private var managementIP = ""
     @State private var confirmReplace = false
     @State private var error: String?
     init(inventory: NetworkInventory, request: ImportRequest) {
         self.inventory = inventory; self.request = request
         _map = State(initialValue: .suggest(request.table.headers, kind: request.kind))
     }
-    private var report: NetworkImportReport { map.records(from: request.table, kind: request.kind, source: request.source, firewallName: firewallName) }
+    private var report: NetworkImportReport { map.records(from: request.table, kind: request.kind, source: request.source, firewallName: firewallName, managementIP: managementIP) }
     private var importedNames: [String] { Array(Set(report.records.map(\.firewall))).sorted() }
+    private var validManagementIP: Bool {
+        let value = managementIP.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty || (!value.contains("/") && IPv4Network(value) != nil)
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \(request.kind.title) CSV").font(.title2.bold())
             Text("\(request.source) · \(request.table.rows.count) records").foregroundStyle(.secondary)
             Text("Enter a firewall name for this file, or select a firewall column if the file includes one. An IPv4 CIDR column is required.")
             HStack { Text("Firewall name"); TextField("Enter firewall name for this file", text: $firewallName).textFieldStyle(.roundedBorder) }
+            HStack { Text("Management IP"); TextField("Optional IPv4 address for this file", text: $managementIP).textFieldStyle(.roundedBorder) }
+            if !validManagementIP { Text("Enter a valid IPv4 management address without a prefix.").font(.caption).foregroundStyle(.red) }
+            if !managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && firewallName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Enter a firewall name to associate this management IP with one firewall.").font(.caption).foregroundStyle(.secondary)
+            }
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                 GridRow { Text("Firewall column"); column($map.firewall) }
                 GridRow { Text(request.kind == .interface ? "Address / Subnet *" : "Destination / Subnet *"); column($map.subnet) }
@@ -121,9 +131,9 @@ private struct NetworkImportView: View {
                 Text("\(record.firewall) · \(record.subnet) · record \(record.row)")
             }.frame(minHeight: 100, maxHeight: 150)
             Text("Import replaces \(request.kind.title.lowercased()) records for the firewalls in this file; other firewalls are kept. Ticket notes and firewall settings are unaffected.").font(.caption).foregroundStyle(.secondary)
-            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Import") { confirmReplace = true }.buttonStyle(.borderedProminent).disabled((firewallName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && map.firewall < 0) || map.subnet < 0 || report.records.isEmpty || inventory.error != nil) }
+            HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Import") { confirmReplace = true }.buttonStyle(.borderedProminent).disabled((firewallName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (map.firewall < 0 || !managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)) || !validManagementIP || map.subnet < 0 || report.records.isEmpty || inventory.error != nil) }
         }
-        .padding(20).frame(width: 660, height: 620)
+        .padding(20).frame(width: 660, height: 670)
         .confirmationDialog("Replace imported \(request.kind.title.lowercased()) records?", isPresented: $confirmReplace) {
             Button("Replace and Import") {
                 do { try inventory.replace(kind: request.kind, with: report.records); dismiss() }

@@ -2,6 +2,30 @@ import XCTest
 @testable import TicketOrganizer
 
 final class FirewallCatalogTests: XCTestCase {
+    @MainActor func testDeviceTypesPersistAndLegacyDefaultsToFirewall() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("tickets.json")
+        let store = TicketStore(url: url)
+        let legacy = try XCTUnwrap(store.firewalls.first)
+        XCTAssertNil(legacy.deviceType)
+        XCTAssertEqual(legacy.effectiveDeviceType, .firewall)
+        let oldData = try JSONEncoder().encode(legacy)
+        XCTAssertEqual(try JSONDecoder().decode(FirewallDefinition.self, from: oldData).effectiveDeviceType, .firewall)
+        let router = FirewallDefinition(id: "router-1", name: "Router 1", deviceGroup: "", zones: [], isActive: true, deviceType: .router)
+        let networkSwitch = FirewallDefinition(id: "switch-1", name: "Switch 1", deviceGroup: "", zones: [], isActive: true, deviceType: .switch)
+        try store.saveFirewall(router, isNew: true)
+        try store.saveFirewall(networkSwitch, isNew: true)
+        let reopened = TicketStore(url: url)
+        XCTAssertEqual(reopened.firewalls.first(where: { $0.id == router.id })?.effectiveDeviceType, .router)
+        XCTAssertEqual(reopened.firewalls.first(where: { $0.id == networkSwitch.id })?.effectiveDeviceType, .switch)
+        let backup = dir.appendingPathComponent("backup.json")
+        try store.exportBackup(to: backup)
+        let restored = TicketStore(url: dir.appendingPathComponent("restored.json"))
+        _ = try restored.restoreBackup(from: backup)
+        XCTAssertEqual(restored.firewalls.first(where: { $0.id == router.id })?.effectiveDeviceType, .router)
+        XCTAssertEqual(restored.firewalls.first(where: { $0.id == networkSwitch.id })?.effectiveDeviceType, .switch)
+    }
     func testPANOSExtractionRecognizesOnlyExplicitLines() {
         let result = FirewallCLIParser.parse("""
         hostname: edge-fw01

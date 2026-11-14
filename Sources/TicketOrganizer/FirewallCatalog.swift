@@ -1,5 +1,11 @@
 import Foundation
 
+enum NetworkDeviceType: String, Codable, CaseIterable, Identifiable {
+    case firewall, router, `switch`
+    var id: String { rawValue }
+    var title: String { switch self { case .firewall: "Firewall"; case .router: "Router"; case .switch: "Switch" } }
+}
+
 struct FirewallDefinition: Codable, Identifiable, Equatable {
     // Stable identifiers keep existing tickets connected when a firewall is renamed.
     var id: String
@@ -8,6 +14,9 @@ struct FirewallDefinition: Codable, Identifiable, Equatable {
     var zones: [String]
     var isActive: Bool
     var managementIP: String? = nil
+    // Missing on older installations; their existing entries are firewalls.
+    var deviceType: NetworkDeviceType? = nil
+    var effectiveDeviceType: NetworkDeviceType { deviceType ?? .firewall }
 
     static var placeholders: [FirewallDefinition] {
         (1...5).map { number in

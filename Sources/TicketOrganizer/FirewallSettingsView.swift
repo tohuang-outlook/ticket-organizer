@@ -16,14 +16,14 @@ struct FirewallSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Firewall Settings").font(.title2.bold())
+                Text("Network Devices").font(.title2.bold())
                 Spacer()
                 Button("Traffic Lookup") { showTrafficLookup = true }
                 Button("Import CLI Output") { request = FirewallEditRequest(firewall: nil, showCLI: true) }
-                Button("Add Firewall") { request = FirewallEditRequest(firewall: nil, showCLI: false) }
+                Button("Add Device") { request = FirewallEditRequest(firewall: nil, showCLI: false) }
                     .buttonStyle(.borderedProminent)
             }
-            Text("Configure names, device groups, and available zones. Existing ticket selections stay linked when a firewall is renamed. Existing zone selections are kept when zones change.")
+            Text("Configure firewalls, routers, and switches. Existing ticket selections stay linked when a device is renamed.")
                 .font(.callout).foregroundStyle(.secondary)
             List {
                 ForEach(store.firewalls.sorted { left, right in
@@ -34,6 +34,7 @@ struct FirewallSettingsView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
                                 Text(firewall.name).fontWeight(.semibold)
+                                Text(firewall.effectiveDeviceType.title).font(.caption).foregroundStyle(.secondary)
                                 if !firewall.isActive { Text("Inactive").font(.caption).foregroundStyle(.secondary) }
                             }
                             Text(firewall.deviceGroup.isEmpty ? "No device group" : firewall.deviceGroup)
@@ -54,7 +55,7 @@ struct FirewallSettingsView: View {
                     .padding(.vertical, 3)
                 }
             }
-            Text("Firewall settings are stored on this Mac and included in ticket backups. They do not currently sync through iCloud.")
+            Text("Network device settings are stored on this Mac and included in ticket backups. They do not currently sync through iCloud.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(20)
@@ -63,7 +64,7 @@ struct FirewallSettingsView: View {
             FirewallEditorView(store: store, firewall: request.firewall, startWithCLI: request.showCLI)
         }
         .sheet(isPresented: $showTrafficLookup) { TrafficLookupView(store: store) }
-        .confirmationDialog("Delete Firewall?", isPresented: Binding(get: { firewallToDelete != nil }, set: { if !$0 { firewallToDelete = nil } }), presenting: firewallToDelete) { firewall in
+        .confirmationDialog("Delete Device?", isPresented: Binding(get: { firewallToDelete != nil }, set: { if !$0 { firewallToDelete = nil } }), presenting: firewallToDelete) { firewall in
             Button("Delete \(firewall.name)", role: .destructive) {
                 do { try store.deleteFirewall(id: firewall.id) }
                 catch { deleteError = error.localizedDescription }
@@ -71,9 +72,9 @@ struct FirewallSettingsView: View {
             }
             Button("Cancel", role: .cancel) { firewallToDelete = nil }
         } message: { firewall in
-            Text("Delete \(firewall.name) from Firewall Settings? Firewalls used by tickets cannot be deleted; deactivate them instead.")
+            Text("Delete \(firewall.name) from Network Devices? Devices used by tickets cannot be deleted; deactivate them instead.")
         }
-        .alert("Unable to Delete Firewall", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+        .alert("Unable to Delete Device", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
             Button("OK") { deleteError = nil }
         } message: { Text(deleteError ?? "") }
     }
@@ -86,6 +87,7 @@ private struct FirewallEditorView: View {
     @State private var name: String
     @State private var deviceGroup: String
     @State private var managementIP: String
+    @State private var deviceType: NetworkDeviceType
     @State private var zoneText: String
     @State private var isActive: Bool
     @State private var showCLI: Bool
@@ -99,6 +101,7 @@ private struct FirewallEditorView: View {
         _name = State(initialValue: firewall?.name ?? "")
         _deviceGroup = State(initialValue: firewall?.deviceGroup ?? "")
         _managementIP = State(initialValue: firewall?.managementIP ?? "")
+        _deviceType = State(initialValue: firewall?.effectiveDeviceType ?? .firewall)
         _zoneText = State(initialValue: firewall?.zones.joined(separator: "\n") ?? "")
         _isActive = State(initialValue: firewall?.isActive ?? true)
         _showCLI = State(initialValue: startWithCLI)
@@ -125,7 +128,7 @@ private struct FirewallEditorView: View {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let firewall = FirewallDefinition(id: original?.id ?? cleanName, name: cleanName,
                                           deviceGroup: deviceGroup, zones: zoneText.components(separatedBy: .newlines),
-                                          isActive: isActive, managementIP: managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : managementIP.trimmingCharacters(in: .whitespacesAndNewlines))
+                                          isActive: isActive, managementIP: managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : managementIP.trimmingCharacters(in: .whitespacesAndNewlines), deviceType: deviceType)
         do {
             try store.saveFirewall(firewall, isNew: original == nil)
             dismiss()
@@ -134,14 +137,15 @@ private struct FirewallEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(original == nil ? "Add Firewall" : "Edit Firewall").font(.title2.bold())
+            Text(original == nil ? "Add Device" : "Edit Device").font(.title2.bold())
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-                GridRow { Text("Firewall Name"); TextField("Firewall name", text: $name) }
+                GridRow { Text("Device Type"); Picker("Device Type", selection: $deviceType) { ForEach(NetworkDeviceType.allCases) { Text($0.title).tag($0) } }.labelsHidden() }
+                GridRow { Text("Device Name"); TextField("Device name", text: $name) }
                 GridRow { Text("Device Group"); TextField("Device group", text: $deviceGroup) }
                 GridRow { Text("Management IP"); TextField("Optional IPv4 address", text: $managementIP) }
             }
             Toggle("Active", isOn: $isActive)
-                .help("Inactive firewalls remain visible in existing tickets but are not offered for new selections.")
+                .help("Inactive devices remain visible in existing tickets but are not offered for new selections.")
             Text("Zones — one per line").font(.headline)
             TextEditor(text: $zoneText).font(.body).frame(minHeight: 80, maxHeight: 120).border(Color.secondary.opacity(0.25))
             DisclosureGroup("Import from CLI output", isExpanded: $showCLI) {
@@ -159,13 +163,13 @@ private struct FirewallEditorView: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Save Firewall") { save() }.buttonStyle(.borderedProminent)
+                Button("Save Device") { save() }.buttonStyle(.borderedProminent)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (!managementIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (managementIP.contains("/") || IPv4Network(managementIP) == nil)))
             }
         }
         .padding(20)
         .frame(width: 620, height: showCLI ? 590 : 380)
-        .alert("Unable to Save Firewall", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+        .alert("Unable to Save Device", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
             Button("OK") { saveError = nil }
         } message: { Text(saveError ?? "") }
     }

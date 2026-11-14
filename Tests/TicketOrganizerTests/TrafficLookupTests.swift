@@ -2,6 +2,19 @@ import XCTest
 @testable import TicketOrganizer
 
 final class TrafficLookupTests: XCTestCase {
+    @MainActor func testRouterImportLinksInventoryToDeviceAndFindsSubnet() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = TicketStore(url: dir.appendingPathComponent("tickets.json"))
+        let router = FirewallDefinition(id: "router-id", name: "Router A", deviceGroup: "", zones: [], isActive: true, deviceType: .router)
+        let table = try CSVTable(text: "name,ip_addresses\neth1,10.12.0.1/24\n")
+        let records = NetworkColumnMap.suggest(table.headers, kind: .interface).records(from: table, kind: .interface, source: "router.csv", firewallName: router.name).records
+        try store.importNetworkRecords(records, kind: .interface, firewall: router, isNew: true, zones: [])
+        let reopened = TicketStore(url: store.url)
+        XCTAssertEqual(reopened.firewalls.first(where: { $0.id == router.id })?.effectiveDeviceType, .router)
+        XCTAssertEqual(NetworkLookup.matches("10.12.0.15", records: try reopened.networkRecords())?.first?.firewallID, router.id)
+    }
+
     func testPossibleFirewallsKeepAllEvidenceWithoutTreatingSameNameAsSameID() throws {
         func record(_ name: String, _ id: String?, _ zone: String, _ router: String) -> NetworkRecord {
             NetworkRecord(kind: .route, firewall: name, firewallID: id, subnet: "10.0.0.0/8", interface: "ae1", zone: zone, router: router, nextHop: "192.0.2.1", source: "routes.csv", row: 2, importedAt: Date(timeIntervalSince1970: 1))

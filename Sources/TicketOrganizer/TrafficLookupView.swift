@@ -74,14 +74,14 @@ private struct PossibleTrafficPathView: View {
                 Text("Candidates appear in both lookup results. Source matches can include return routes; they do not establish ingress, path order, connectivity or policy approval. Different routing contexts may be unrelated.")
                     .font(.system(size: 16)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if source == nil || destination == nil {
-                    Text("Enter a valid source and destination to see common firewalls.").foregroundStyle(.secondary)
+                    Text("Enter a valid source and destination to see common devices.").foregroundStyle(.secondary)
                 } else if candidates.isEmpty {
-                    Text("No common firewalls found in the imported matches. This does not establish that a path is absent.").foregroundStyle(.secondary)
+                    Text("No common devices found in the imported matches. This does not establish that a path is absent.").foregroundStyle(.secondary)
                 } else {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 10) {
                             ForEach(candidates) { candidate in
-                                DisclosureGroup("\(candidate.name) — \(candidate.sourceMatches.count) source / \(candidate.destinationMatches.count) destination matches") {
+                                DisclosureGroup("\(candidate.name)\(firewalls.first(where: { "id:" + $0.id == candidate.id }).map { " · \($0.effectiveDeviceType.title)" } ?? "") — \(candidate.sourceMatches.count) source / \(candidate.destinationMatches.count) destination matches") {
                                     HStack(alignment: .top, spacing: 16) {
                                         evidence("Source-side matches", candidate.sourceMatches)
                                         evidence("Destination-side matches", candidate.destinationMatches)
@@ -92,7 +92,7 @@ private struct PossibleTrafficPathView: View {
                     }.frame(maxHeight: 190)
                 }
             }.padding(.top, 6)
-        } label: { Text("Possible Traffic Path — common firewall candidates").font(.system(size: 16, weight: .semibold)) }
+        } label: { Text("Possible Traffic Path — common device candidates").font(.system(size: 16, weight: .semibold)) }
     }
     private func evidence(_ title: String, _ records: [NetworkRecord]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -133,6 +133,7 @@ private struct TrafficLookupColumn: View {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
                                 Text(firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.system(size: 16, weight: .semibold))
+                                if let device = firewalls.first(where: { $0.id == record.firewallID }) { Text(device.effectiveDeviceType.title).font(.system(size: 16)).foregroundStyle(.secondary) }
                                 Text(record.kind == .interface ? "Interface match" : "Route match").font(.system(size: 16)).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
                                 Spacer()
                             }
@@ -165,6 +166,7 @@ private struct NetworkImportView: View {
     @State private var map: NetworkColumnMap
     @State private var firewallName = ""
     @State private var firewallID = ""
+    @State private var deviceType: NetworkDeviceType = .firewall
     @State private var managementIP = ""
     @State private var deviceGroup = ""
     @State private var excludedZones: Set<String> = []
@@ -186,19 +188,20 @@ private struct NetworkImportView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \(request.kind.title) CSV").font(.title2.bold())
             Text("\(request.source) · \(request.table.rows.count) records").foregroundStyle(.secondary)
-            Text("Choose the firewall for this file and review the columns and zones before importing.")
+            Text("Choose the device for this file and review the columns and zones before importing.")
             HStack {
-                Text("Firewall")
-                Picker("Firewall", selection: $firewallID) {
-                    Text("Add New Firewall").tag("")
+                Text("Device")
+                Picker("Device", selection: $firewallID) {
+                    Text("Add New Device").tag("")
                     ForEach(store.firewalls.sorted { left, right in
                         let order = left.name.localizedStandardCompare(right.name)
                         return order == .orderedSame ? left.id < right.id : order == .orderedAscending
-                    }) { firewall in Text(firewall.name).tag(firewall.id) }
+                    }) { firewall in Text("\(firewall.name) · \(firewall.effectiveDeviceType.title)").tag(firewall.id) }
                 }.labelsHidden()
             }
             if firewallID.isEmpty {
-                HStack { Text("Firewall name"); TextField("Enter firewall name", text: $firewallName).textFieldStyle(.roundedBorder) }
+                HStack { Text("Device type"); Picker("Device type", selection: $deviceType) { ForEach(NetworkDeviceType.allCases) { Text($0.title).tag($0) } }.labelsHidden() }
+                HStack { Text("Device name"); TextField("Enter device name", text: $firewallName).textFieldStyle(.roundedBorder) }
                 HStack { Text("Device Group"); TextField("Optional device group", text: $deviceGroup).textFieldStyle(.roundedBorder) }
             }
             HStack { Text("Management IP"); TextField("Optional IPv4 address for this file", text: $managementIP).textFieldStyle(.roundedBorder) }
@@ -212,7 +215,7 @@ private struct NetworkImportView: View {
             }
             Text("\(report.records.count) records ready · \(report.skippedRows.count) records skipped").fontWeight(.semibold)
             if !report.skippedRows.isEmpty {
-                Text("Skipped CSV records: \(report.skippedRows.prefix(15).map(String.init).joined(separator: ", "))\(report.skippedRows.count > 15 ? " …" : ""). Check firewall names and IPv4 CIDR values.").font(.caption).foregroundStyle(.secondary)
+                Text("Skipped CSV records: \(report.skippedRows.prefix(15).map(String.init).joined(separator: ", "))\(report.skippedRows.count > 15 ? " …" : ""). Check device names and IPv4 CIDR values.").font(.caption).foregroundStyle(.secondary)
             }
             List(report.records) { record in
                 VStack(alignment: .leading, spacing: 2) {
@@ -232,7 +235,7 @@ private struct NetworkImportView: View {
                 }.frame(maxHeight: 110)
                 Text("Verify zone names before importing; existing zones are kept.").font(.caption).foregroundStyle(.secondary)
             }
-            Text("Import replaces \(request.kind.title.lowercased()) records for the selected firewall. Other firewalls and existing zones are kept.").font(.caption).foregroundStyle(.secondary)
+            Text("Import replaces \(request.kind.title.lowercased()) records for the selected device. Other devices and existing zones are kept.").font(.caption).foregroundStyle(.secondary)
             HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Import") { confirmReplace = true }.buttonStyle(.borderedProminent).disabled(chosenName.isEmpty || !validManagementIP || map.subnet < 0 || report.records.isEmpty) }
         }
         .padding(20).frame(width: 660, height: 760)
@@ -240,12 +243,13 @@ private struct NetworkImportView: View {
             let selected = store.firewalls.first { $0.id == id }
             managementIP = selected?.managementIP ?? ""
             deviceGroup = selected?.deviceGroup ?? ""
+            deviceType = selected?.effectiveDeviceType ?? .firewall
         }
         .confirmationDialog("Replace imported \(request.kind.title.lowercased()) records?", isPresented: $confirmReplace) {
             Button("Replace and Import") {
                 do {
                     let name = chosenName
-                    var firewall = selectedFirewall ?? FirewallDefinition(id: UUID().uuidString, name: name, deviceGroup: deviceGroup, zones: [], isActive: true)
+                    var firewall = selectedFirewall ?? FirewallDefinition(id: UUID().uuidString, name: name, deviceGroup: deviceGroup, zones: [], isActive: true, deviceType: deviceType)
                     let address = managementIP.trimmingCharacters(in: .whitespacesAndNewlines)
                     firewall.managementIP = address.isEmpty ? nil : address
                     let records = map.records(from: request.table, kind: request.kind, source: request.source, firewallName: name, managementIP: address).records
@@ -255,7 +259,7 @@ private struct NetworkImportView: View {
                 catch { self.error = error.localizedDescription }
             }
             Button("Cancel", role: .cancel) { }
-        } message: { Text("Existing \(request.kind.title.lowercased()) records for \(chosenName) will be replaced by \(report.records.count) records. Other firewalls are kept.") }
+        } message: { Text("Existing \(request.kind.title.lowercased()) records for \(chosenName) will be replaced by \(report.records.count) records. Other devices are kept.") }
         .alert("Unable to Import", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
     }
     private func column(_ selection: Binding<Int>) -> some View {

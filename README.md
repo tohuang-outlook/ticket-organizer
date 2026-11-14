@@ -4,8 +4,9 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 
 ## Daily use
 
-- Open Traffic Lookup from the main window, firewall settings or a ticket. Select an existing firewall or add one, map the CSV columns, review records and select zones to merge. Imports replace the same record type for that firewall while preserving other firewalls. Firewall metadata and imported records are stored locally and included in ticket backups, but are not synced through iCloud. A previous `network-inventory.json` is read and retained when the first new import is saved. Enter source and destination IPv4 addresses or CIDR subnets to view independent interface and route matches side by side, with source file and import time. Missing CIDR prefixes are treated as /32. Lookup does not verify route status, metrics, NAT, PBF, topology or actual forwarding. A subnet query only matches networks containing the entire query.
-- Possible Traffic Path lists firewalls present in both result sets, with separate source-side and destination-side evidence. Source-side route matches may describe return routing, not packet ingress; different routing contexts may be unrelated. Candidates do not establish connectivity, direction, traversal order or policy approval.
+- Open Traffic Lookup from the main window, Network Devices settings or a ticket. Select an existing device or add one, map the CSV columns, review records and select zones to merge. Imports replace the same record type for that device while preserving other devices. Device metadata and imported records are stored locally and included in ticket backups, but are not synced through iCloud. A previous `network-inventory.json` is read and retained when the first new import is saved. Enter source and destination IPv4 addresses or CIDR subnets to view independent interface and route matches side by side, with source file and import time. Missing CIDR prefixes are treated as /32. Lookup does not verify route status, metrics, NAT, PBF, topology or actual forwarding. A subnet query only matches networks containing the entire query.
+- Network Devices settings supports Firewall, Router and Switch types. Existing entries without a device type remain firewalls. Device types are included in ticket backups; network inventory and settings remain local and do not sync through iCloud. Interface and route CSV data can be imported for any device type. This does not infer layer-2 topology or a verified packet path.
+- Possible Traffic Path lists devices present in both result sets, with separate source-side and destination-side evidence. Source-side route matches may describe return routing, not packet ingress; different routing contexts may be unrelated. Candidates do not establish connectivity, direction, traversal order or policy approval.
 - Click once to select a ticket; double-click to open a movable, resizable editor.
 - The ticket editor uses 18 pt text for the RITM, CHG, and note title inputs.
 - The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt; RITM numbers are blue and bold, while CHG numbers use high-contrast primary text with medium weight. Notes shows only the note title; the full body remains available in the editor and search.
@@ -16,10 +17,10 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
 - Warn when an entered RITM already exists, with the matching CHG, status, and title. The warning does not block intentional duplicates.
 - Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
-- Firewall selection text uses 16 pt; the firewall path uses 22 pt bold text.
-- Configure firewall names, device groups, available zones, and active status in Ticket Organizer > Settings > Firewalls. FW01–FW05 and their numbered device groups and zones are initial placeholders. Active firewalls appear in the three Traffic Flow menus below Created; each step and its device group appear below its menu. Choices are saved with the ticket; use Clear to remove a selection. Additional steps saved by older versions remain visible as read-only text and are preserved.
-- Use Remove Firewall in a firewall menu to remove a firewall from future selections. Existing ticket details remain available; reactivate the firewall in Settings > Firewalls when needed.
-- Use Import CLI Output in Firewall Settings to extract a hostname and zones from PAN-OS `show interface all`, or explicit `hostname:`, `set deviceconfig system hostname`, and `set zone` lines from one firewall. Interface tables may truncate long zone names, so verify and complete them before saving; device group is entered manually. Pasted CLI text is processed locally and is not saved.
+- Device selection text uses 16 pt; the device path uses 22 pt bold text.
+- Configure device names, types, device groups, available zones, and active status in Ticket Organizer > Settings > Network Devices. FW01–FW05 and their numbered device groups and zones are initial placeholders. Active devices appear in the three Traffic Flow menus below Created; each step and its device group appear below its menu. Choices are saved with the ticket; use Clear to remove a selection. Additional steps saved by older versions remain visible as read-only text and are preserved.
+- Use Remove Device in a device menu to remove a device from future selections. Existing ticket details remain available; reactivate the device in Settings > Network Devices when needed.
+- Use Import CLI Output in Network Devices settings to extract a hostname and zones from PAN-OS `show interface all`, or explicit `hostname:`, `set deviceconfig system hostname`, and `set zone` lines from one firewall. Interface tables may truncate long zone names, so verify and complete them before saving; device group is entered manually. Pasted CLI text is processed locally and is not saved.
   Supported line examples follow the Palo Alto Networks documentation for [system information](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/use-the-cli/view-settings-and-statistics) and the [PAN-OS CLI command hierarchy](https://docs.paloaltonetworks.com/ngfw/pan-os-cli-quick-start/cli-command-hierarchy/pan-os-11-2-configure-cli-command-hierarchy).
 - After selecting a firewall, use its Zones menu to choose up to two zones in order. The selected path appears in 20 pt bold text below that firewall and is saved with the ticket. Deselect a zone to change the order; changing or clearing the firewall clears its zones.
 - Use Add Traffic Flow to add another independent path, or Remove Flow to remove an additional path. Save the ticket to keep changes.
@@ -71,6 +72,8 @@ Update every Mac to 1.4.38 or newer before using Close Pending with iCloud. Olde
 
 Update all Macs to 1.4.43 before using integrated firewall inventory; older versions may discard inventory or management-IP fields when saving. Firewall settings and network inventory are local and do not sync through iCloud.
 
+Update to 1.4.51 before using Router or Switch records. Older versions may discard device-type information when saving firewall settings or restoring backups.
+
 Working requires 1.2.2 or newer on every Mac. Its addition preserves existing workflow values and does not move existing tickets or change the default Draft/Low settings.
 
 Older versions did not record creation time. Their last-modified timestamp is used as the initial creation time and preserved on subsequent edits. The original creation time cannot be reconstructed.
@@ -98,7 +101,7 @@ open "dist/Ticket Organizer.app"
 VERSION controls the default release version. Override version and build number when needed:
 
 ```bash
-MARKETING_VERSION=1.4.50 BUILD_NUMBER=86 ./scripts/build-app.sh
+MARKETING_VERSION=1.4.51 BUILD_NUMBER=87 ./scripts/build-app.sh
 (cd dist && shasum -c SHA256SUMS)
 ```
 
@@ -145,7 +148,7 @@ REQUIRE_NOTARIZATION=1 \
 
 The build validates profile expiration, App ID, CloudKit service, container, and environment before generating entitlements. It embeds the profile and signs the complete app. REQUIRE_ICLOUD=1 rejects builds without a profile or with a non-Production environment. Do not commit certificates, profiles, credentials, or ticket data. Use a development profile and ICLOUD_ENVIRONMENT=Development for development-only testing; do not mix the two environments across Macs.
 
-## Release acceptance gates (1.4.50)
+## Release acceptance gates (1.4.51)
 
 Local automated tests and an ad-hoc package are not sufficient for a public production release. Before publishing:
 

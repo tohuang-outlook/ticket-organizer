@@ -31,7 +31,7 @@ struct TicketOrganizerApp: App {
             }
         Window("Settings", id: "settings") {
             TabView {
-                FirewallSettingsView(store: store).tabItem { Label("Firewalls", systemImage: "network") }
+                FirewallSettingsView(store: store).tabItem { Label("Network Devices", systemImage: "network") }
                 CloudSyncSettingsView(store: store, sync: store.cloudSync).tabItem { Label("iCloud", systemImage: "icloud") }
             }
             .environment(\.locale, Locale(identifier: "en"))
@@ -563,7 +563,7 @@ private struct TrafficFlowSelector: View {
                     Button("Copy Flow") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(copyableFlow, forType: .string)
-                    }.help("Copy the device groups, firewalls, and zones in this flow")
+                    }.help("Copy the device groups, devices, and zones in this flow")
                 }
                 if let onRemove { Button("Remove Flow", role: .destructive, action: onRemove) }
             }
@@ -620,7 +620,7 @@ private struct TrafficFlowSelector: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .confirmationDialog("Remove Firewall from Menus?", isPresented: Binding(get: { firewallToRemove != nil }, set: { if !$0 { firewallToRemove = nil } }), presenting: firewallToRemove) { firewall in
+        .confirmationDialog("Remove Device from Menus?", isPresented: Binding(get: { firewallToRemove != nil }, set: { if !$0 { firewallToRemove = nil } }), presenting: firewallToRemove) { firewall in
             Button("Remove \(firewall.name)", role: .destructive) {
                 do { try store.setFirewallActive(id: firewall.id, isActive: false) }
                 catch { removalError = error.localizedDescription }
@@ -628,9 +628,9 @@ private struct TrafficFlowSelector: View {
             }
             Button("Cancel", role: .cancel) { firewallToRemove = nil }
         } message: { firewall in
-            Text("\(firewall.name) will be removed from the firewall menus. Existing tickets keep its details. You can reactivate it in Firewall Settings.")
+            Text("\(firewall.name) will be removed from the device menus. Existing tickets keep its details. You can reactivate it in Network Devices settings.")
         }
-        .alert("Unable to Remove Firewall", isPresented: Binding(get: { removalError != nil }, set: { if !$0 { removalError = nil } })) {
+        .alert("Unable to Remove Device", isPresented: Binding(get: { removalError != nil }, set: { if !$0 { removalError = nil } })) {
             Button("OK") { removalError = nil }
         } message: { Text(removalError ?? "") }
     }
@@ -728,18 +728,18 @@ private struct FirewallMenu: View {
             }
             if catalog.contains(where: \.isActive) {
                 Divider()
-                Menu("Remove Firewall…") {
+                Menu("Remove Device…") {
                     ForEach(catalog.filter(\.isActive)) { firewall in
                         Button(firewall.name, role: .destructive) { onRemove(firewall) }
                     }
                 }
             }
         } label: {
-            Text(selectedFirewall.isEmpty ? "Select FW" : (catalog.first { $0.id == selectedFirewall }?.name ?? selectedFirewall))
+            Text(selectedFirewall.isEmpty ? "Select Device" : (catalog.first { $0.id == selectedFirewall }?.name ?? selectedFirewall))
                 .font(.system(size: 16))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .accessibilityLabel("Traffic Flow firewall \(position)")
+        .accessibilityLabel("Traffic Flow device \(position)")
     }
 }
 
@@ -812,7 +812,7 @@ private struct ZoneMenu: View {
         .onChange(of: firewall) { _, _ in isOpen = false; search = "" }
         .disabled(firewall.isEmpty)
         .help("Choose up to two zones in traffic order")
-        .accessibilityLabel("Zones for firewall \(position)")
+        .accessibilityLabel("Zones for device \(position)")
         .accessibilityValue(selectedZones.isEmpty ? "None selected" : selectedZones.joined(separator: " to "))
     }
 }

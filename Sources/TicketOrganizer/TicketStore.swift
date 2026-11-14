@@ -90,11 +90,11 @@ final class TicketStore: ObservableObject {
         case nameRequired, duplicateName, duplicateZone, missingFirewall, firewallInUse, invalidImport
         var errorDescription: String? {
             switch self {
-            case .nameRequired: "Enter a firewall name."
-            case .duplicateName: "This firewall name is already in use or reserved by an existing firewall."
+            case .nameRequired: "Enter a device name."
+            case .duplicateName: "This device name is already in use or reserved by an existing device."
             case .duplicateZone: "Each zone must have a unique name."
-            case .missingFirewall: "This firewall is no longer available. Reopen Firewall Settings and try again."
-            case .firewallInUse: "This firewall is used by a ticket. Deactivate it to remove it from selection menus while keeping the ticket's firewall and zone information."
+            case .missingFirewall: "This device is no longer available. Reopen Network Devices settings and try again."
+            case .firewallInUse: "This device is used by a ticket. Deactivate it to remove it from selection menus while keeping the ticket's device and zone information."
             case .invalidImport: "No valid records are available to import."
             }
         }

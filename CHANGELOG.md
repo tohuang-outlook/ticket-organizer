@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.51
+
+- Add Router and Switch device types alongside existing firewalls for settings, CSV imports, ticket traffic flows and lookup results.
+
 ## 1.4.50
 
 - Set Traffic Lookup text and controls to 16 pt.

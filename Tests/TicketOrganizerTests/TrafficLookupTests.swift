@@ -2,6 +2,18 @@ import XCTest
 @testable import TicketOrganizer
 
 final class TrafficLookupTests: XCTestCase {
+    func testInterfaceSubnetMatchesPrecedeRoutesForEachAddress() throws {
+        func record(_ kind: NetworkRecordKind, _ device: String, _ subnet: String) -> NetworkRecord {
+            NetworkRecord(kind: kind, firewall: device, subnet: subnet, interface: "eth1", zone: "", router: "", nextHop: "", source: "test.csv", row: 2, importedAt: Date())
+        }
+        let records = [record(.route, "route", "10.1.2.42/32"), record(.interface, "router", "10.1.2.1/24"), record(.interface, "switch", "10.1.2.2/25"), record(.route, "other", "10.0.0.0/8")]
+        let source = try XCTUnwrap(NetworkLookup.matches("10.1.2.42", records: records))
+        XCTAssertEqual(source.map(\.kind), [.interface, .interface, .route, .route])
+        XCTAssertEqual(source.prefix(2).map(\.firewall), ["switch", "router"])
+        let destination = try XCTUnwrap(NetworkLookup.matches("10.9.0.1", records: records))
+        XCTAssertEqual(destination.map(\.kind), [.route])
+        XCTAssertEqual(NetworkLookup.matches("192.0.2.1", records: records)?.count, 0)
+    }
     @MainActor func testRouterImportLinksInventoryToDeviceAndFindsSubnet() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }

@@ -130,24 +130,44 @@ private struct TrafficLookupColumn: View {
                 if results.isEmpty {
                     ContentUnavailableView("No matching records", systemImage: "network.slash", description: Text("Check the input and imported data."))
                 } else {
-                    List(results) { record in
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Text(firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.system(size: 16, weight: .semibold))
-                                if let device = firewalls.first(where: { $0.id == record.firewallID }) { Text(device.effectiveDeviceType.title).font(.system(size: 16)).foregroundStyle(.secondary) }
-                                Text(record.kind == .interface ? "Interface match" : "Route match").font(.system(size: 16)).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-                                Spacer()
+                    let interfaces = results.filter { $0.kind == .interface }
+                    let routes = results.filter { $0.kind == .route }
+                    List {
+                        Section {
+                            if interfaces.isEmpty {
+                                Text("No imported interface subnet contains this address.").foregroundStyle(.secondary)
+                            } else {
+                                ForEach(interfaces) { record in resultRow(record) }
                             }
-                            Text(record.subnet).monospaced()
-                            Text(details(record)).font(.system(size: 16))
-                            Text("Source: \(record.source), \(record.sourceLine == nil ? "CSV record" : "TXT line") \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
-                        }.padding(.vertical, 4)
+                        } header: {
+                            Text("Interface subnet matches (\(interfaces.count))").font(.system(size: 16, weight: .semibold))
+                        }
+                        if !routes.isEmpty {
+                            Section {
+                                ForEach(routes) { record in resultRow(record) }
+                            } header: {
+                                Text("Route matches (\(routes.count))").font(.system(size: 16, weight: .semibold))
+                            }
+                        }
                     }
                 }
             } else {
                 ContentUnavailableView("Invalid IPv4 address or subnet", systemImage: "exclamationmark.triangle", description: Text("Use an IPv4 address or CIDR subnet."))
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    private func resultRow(_ record: NetworkRecord) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(firewalls.first(where: { $0.id == record.firewallID })?.name ?? record.firewall).font(.system(size: 16, weight: .semibold))
+                if let device = firewalls.first(where: { $0.id == record.firewallID }) { Text(device.effectiveDeviceType.title).font(.system(size: 16)).foregroundStyle(.secondary) }
+                Text(record.kind == .interface ? "Interface match" : "Route match").font(.system(size: 16)).padding(4).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                Spacer()
+            }
+            Text(record.subnet).monospaced()
+            Text(details(record)).font(.system(size: 16))
+            Text("Source: \(record.source), \(record.sourceLine == nil ? "CSV record" : "TXT line") \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
+        }.padding(.vertical, 4)
     }
     private func details(_ record: NetworkRecord) -> String {
         [("Management IP", firewalls.first(where: { $0.id == record.firewallID })?.managementIP ?? record.managementIP ?? ""), ("Interface", record.interface), (record.zoneMayBeTruncated == true ? "Zone (may be truncated)" : "Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop), ("Interface status", record.interfaceStatus ?? "")]

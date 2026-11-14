@@ -19,7 +19,7 @@ struct TrafficLookupView: View {
             HStack {
                 Text("Traffic Lookup").font(.system(size: 16, weight: .bold))
                 Spacer()
-                Button("Import Interfaces CSV") { chooseFile(.interface) }
+                Button("Import Interfaces CSV / TXT") { chooseFile(.interface) }
                 Button("Import Routes CSV") { chooseFile(.route) }
             }
             Text("Compare the imported subnet matches for a source and destination. Review the evidence before using the results.")
@@ -42,7 +42,7 @@ struct TrafficLookupView: View {
         .font(.system(size: 16))
         .padding(20).frame(minWidth: 720, minHeight: 520)
         .sheet(item: $importRequest) { request in NetworkImportView(store: store, request: request) }
-        .alert("Unable to Import CSV", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
+        .alert("Unable to Import File", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
     }
     private func chooseFile(_ kind: NetworkRecordKind) {
         let panel = NSOpenPanel()
@@ -55,7 +55,8 @@ struct TrafficLookupView: View {
             let data = try Data(contentsOf: url)
             guard data.count <= 20 * 1024 * 1024 else { throw CSVReadError.size }
             guard let text = String(data: data, encoding: .utf8) else { throw NSError(domain: "CSV", code: 1, userInfo: [NSLocalizedDescriptionKey: "Save the CSV as UTF-8 and try again."]) }
-            importRequest = ImportRequest(kind: kind, source: url.lastPathComponent, table: try CSVTable(text: text))
+            let table = try kind == .interface && url.pathExtension.lowercased() == "txt" ? InterfaceTextParser.parse(text) : CSVTable(text: text)
+            importRequest = ImportRequest(kind: kind, source: url.lastPathComponent, table: table)
         } catch { self.error = error.localizedDescription }
     }
 }
@@ -100,8 +101,8 @@ private struct PossibleTrafficPathView: View {
             ForEach(records) { record in
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(record.kind == .interface ? "Interface" : "Route"): \(record.subnet)").fontWeight(.medium)
-                    Text([record.zone.isEmpty ? "Zone: unknown" : "Zone: \(record.zone)", record.interface.isEmpty ? "Interface: unknown" : "Interface: \(record.interface)", record.router.isEmpty ? "Routing context: unknown" : "Routing context: \(record.router)", record.nextHop.isEmpty ? "" : "Next hop: \(record.nextHop)"].filter { !$0.isEmpty }.joined(separator: " · "))
-                    Text("\(record.source), CSV record \(record.row) · \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
+                    Text([record.zone.isEmpty ? "Zone: unknown" : "Zone\(record.zoneMayBeTruncated == true ? " (may be truncated)" : ""): \(record.zone)", record.interface.isEmpty ? "Interface: unknown" : "Interface: \(record.interface)", record.router.isEmpty ? "Routing context: unknown" : "Routing context: \(record.router)", record.nextHop.isEmpty ? "" : "Next hop: \(record.nextHop)", record.interfaceStatus ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text("\(record.source), \(record.sourceLine == nil ? "CSV record" : "TXT line") \(record.row) · \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
                 }.font(.system(size: 16)).textSelection(.enabled)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -139,7 +140,7 @@ private struct TrafficLookupColumn: View {
                             }
                             Text(record.subnet).monospaced()
                             Text(details(record)).font(.system(size: 16))
-                            Text("Source: \(record.source), CSV record \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
+                            Text("Source: \(record.source), \(record.sourceLine == nil ? "CSV record" : "TXT line") \(record.row) · Imported \(record.importedAt.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 16)).foregroundStyle(.secondary)
                         }.padding(.vertical, 4)
                     }
                 }
@@ -149,7 +150,7 @@ private struct TrafficLookupColumn: View {
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     private func details(_ record: NetworkRecord) -> String {
-        [("Management IP", firewalls.first(where: { $0.id == record.firewallID })?.managementIP ?? record.managementIP ?? ""), ("Interface", record.interface), ("Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop)]
+        [("Management IP", firewalls.first(where: { $0.id == record.firewallID })?.managementIP ?? record.managementIP ?? ""), ("Interface", record.interface), (record.zoneMayBeTruncated == true ? "Zone (may be truncated)" : "Zone", record.zone), ("Router / VSYS", record.router), ("Next hop", record.nextHop), ("Interface status", record.interfaceStatus ?? "")]
             .filter { !$0.1.isEmpty }.map { "\($0.0): \($0.1)" }.joined(separator: " · ")
     }
 }
@@ -170,6 +171,7 @@ private struct NetworkImportView: View {
     @State private var managementIP = ""
     @State private var deviceGroup = ""
     @State private var excludedZones: Set<String> = []
+    @State private var selectedTextZones: Set<String> = []
     @State private var confirmReplace = false
     @State private var error: String?
     init(store: TicketStore, request: ImportRequest) {
@@ -186,8 +188,11 @@ private struct NetworkImportView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Import \(request.kind.title) CSV").font(.title2.bold())
+            Text("Import \(request.kind.title) \(request.table.textFormat == nil ? "CSV" : "TXT")").font(.title2.bold())
             Text("\(request.source) · \(request.table.rows.count) records").foregroundStyle(.secondary)
+            if let format = request.table.textFormat {
+                Text(format == "PAN-OS" ? "PAN-OS table zone names can be truncated. Verify names before adding zones; none are selected by default." : "Cisco configuration: only IPv4 interface addresses with subnet masks are imported. Operational state and routing paths are not verified.").font(.caption).foregroundStyle(.secondary)
+            }
             Text("Choose the device for this file and review the columns and zones before importing.")
             HStack {
                 Text("Device")
@@ -215,12 +220,12 @@ private struct NetworkImportView: View {
             }
             Text("\(report.records.count) records ready · \(report.skippedRows.count) records skipped").fontWeight(.semibold)
             if !report.skippedRows.isEmpty {
-                Text("Skipped CSV records: \(report.skippedRows.prefix(15).map(String.init).joined(separator: ", "))\(report.skippedRows.count > 15 ? " …" : ""). Check device names and IPv4 CIDR values.").font(.caption).foregroundStyle(.secondary)
+                Text("Skipped \(request.table.sourceLines == nil ? "CSV records" : "TXT lines"): \(report.skippedRows.prefix(15).map(String.init).joined(separator: ", "))\(report.skippedRows.count > 15 ? " …" : ""). Check device names and IPv4 CIDR values.").font(.caption).foregroundStyle(.secondary)
             }
             List(report.records) { record in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(record.subnet) · record \(record.row)")
-                    Text([record.interface, record.zone, record.router, record.nextHop].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text("\(record.subnet) · \(record.sourceLine == nil ? "record" : "line") \(record.row)")
+                    Text([record.interface, record.zone, record.router, record.nextHop, record.interfaceStatus ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.frame(minHeight: 100, maxHeight: 150)
@@ -229,7 +234,10 @@ private struct NetworkImportView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading) {
                         ForEach(zones, id: \.self) { zone in
-                            Toggle(zone, isOn: Binding(get: { !excludedZones.contains(zone) }, set: { if $0 { excludedZones.remove(zone) } else { excludedZones.insert(zone) } }))
+                            Toggle(zone, isOn: Binding(get: { request.table.textFormat == "PAN-OS" ? selectedTextZones.contains(zone) : !excludedZones.contains(zone) }, set: { value in
+                                if request.table.textFormat == "PAN-OS" { if value { selectedTextZones.insert(zone) } else { selectedTextZones.remove(zone) } }
+                                else { if value { excludedZones.remove(zone) } else { excludedZones.insert(zone) } }
+                            }))
                         }
                     }
                 }.frame(maxHeight: 110)
@@ -253,7 +261,7 @@ private struct NetworkImportView: View {
                     let address = managementIP.trimmingCharacters(in: .whitespacesAndNewlines)
                     firewall.managementIP = address.isEmpty ? nil : address
                     let records = map.records(from: request.table, kind: request.kind, source: request.source, firewallName: name, managementIP: address).records
-                    try store.importNetworkRecords(records, kind: request.kind, firewall: firewall, isNew: selectedFirewall == nil, zones: zones.filter { !excludedZones.contains($0) })
+                    try store.importNetworkRecords(records, kind: request.kind, firewall: firewall, isNew: selectedFirewall == nil, zones: zones.filter { request.table.textFormat == "PAN-OS" ? selectedTextZones.contains($0) : !excludedZones.contains($0) })
                     dismiss()
                 }
                 catch { self.error = error.localizedDescription }

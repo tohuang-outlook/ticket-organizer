@@ -43,6 +43,11 @@ enum CSVReadError: LocalizedError {
 struct CSVTable {
     let headers: [String]
     let rows: [[String]]
+    let sourceLines: [Int]?
+    let textFormat: String?
+    init(headers: [String], rows: [[String]], sourceLines: [Int], textFormat: String) {
+        self.headers = headers; self.rows = rows; self.sourceLines = sourceLines; self.textFormat = textFormat
+    }
     init(text: String) throws {
         var records: [[String]] = [], row: [String] = [], field = ""
         var quoted = false, closedQuote = false, atStart = true
@@ -75,6 +80,7 @@ struct CSVTable {
         guard records.count >= 2 else { throw CSVReadError.empty }
         headers = records[0].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         rows = Array(records.dropFirst())
+        sourceLines = nil; textFormat = nil
     }
 }
 
@@ -97,6 +103,9 @@ struct NetworkRecord: Codable, Identifiable, Equatable {
     var source: String
     var row: Int
     var importedAt: Date
+    var sourceLine: Int? = nil
+    var interfaceStatus: String? = nil
+    var zoneMayBeTruncated: Bool? = nil
 }
 struct NetworkImportReport {
     var records: [NetworkRecord]
@@ -126,9 +135,12 @@ struct NetworkColumnMap {
             let manualName = firewallName.trimmingCharacters(in: .whitespacesAndNewlines)
             let rowName = manualName.isEmpty ? value(row, firewall) : manualName
             let subnetText = value(row, subnet)
-            guard !rowName.isEmpty, IPv4Network(subnetText) != nil else { skipped.append(index + 2); continue }
+            let rowNumber = table.sourceLines?[index] ?? index + 2
+            guard !rowName.isEmpty, IPv4Network(subnetText) != nil else { skipped.append(rowNumber); continue }
             let management = managementIP.trimmingCharacters(in: .whitespacesAndNewlines)
-            output.append(NetworkRecord(kind: kind, firewall: rowName, managementIP: management.isEmpty ? nil : management, subnet: subnetText, interface: value(row, interface), zone: value(row, zone), router: value(row, router), nextHop: value(row, nextHop), source: source, row: index + 2, importedAt: now))
+            let statusIndex = table.headers.firstIndex(of: "Administrative status") ?? -1
+            let status = value(row, statusIndex)
+            output.append(NetworkRecord(kind: kind, firewall: rowName, managementIP: management.isEmpty ? nil : management, subnet: subnetText, interface: value(row, interface), zone: value(row, zone), router: value(row, router), nextHop: value(row, nextHop), source: source, row: rowNumber, importedAt: now, sourceLine: table.sourceLines?[index], interfaceStatus: status.isEmpty ? nil : status, zoneMayBeTruncated: table.textFormat == "PAN-OS" ? true : nil))
         }
         return NetworkImportReport(records: output, skippedRows: skipped)
     }

@@ -5,6 +5,19 @@ import SwiftUI
 
 final class RichTextTests: XCTestCase {
     @MainActor
+    func testDefaultTemplatePreservesTextAndBoldFormatting() throws {
+        let data = try XCTUnwrap(DefaultTicketTemplate.richText())
+        let restored = try XCTUnwrap(RichNoteEditor.restoredBody(from: data))
+        XCTAssertEqual(restored.string, DefaultTicketTemplate.text)
+        for phrase in ["On Panorama, Device Group: QUINCY_UCSF", "shared", "Backout Plan:"] {
+            let range = (restored.string as NSString).range(of: phrase)
+            XCTAssertNotEqual(range.location, NSNotFound)
+            let font = try XCTUnwrap(restored.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)
+            XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+            XCTAssertEqual(font.pointSize, 16)
+        }
+    }
+    @MainActor
     func testSelectedRedTextSurvivesSaveAndCanBeUndone() throws {
         var text = "first second"
         var richBody: Data?

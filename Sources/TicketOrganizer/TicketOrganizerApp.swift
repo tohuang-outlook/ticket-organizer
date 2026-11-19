@@ -282,7 +282,7 @@ struct ContentView: View {
                 } primaryAction: { ids in
                     if let id = ids.first { openTicket(id) }
                 }
-            }.sheet(isPresented: $showNew) { NewTicketView(store: store, existingNotes: store.notes) { try store.add($0); selection = .draft; selectedID = $0.id } }
+            }
         }
         .alert("Delete this ticket?", isPresented: $showDeleteConfirmation, presenting: ticketToDelete) { note in
             Button("Cancel", role: .cancel) { ticketToDelete = nil }
@@ -299,6 +299,13 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showTrafficLookup) { TrafficLookupView(store: store) }
         .sheet(isPresented: $showScreenshotImport) { ScreenshotTicketImportView(store: store) { selection = .draft; selectedID = nil } }
+        .onChange(of: showNew) { _, open in
+            guard open else { return }
+            showNew = false
+            TicketEditorWindows.shared.openNew(store: store) { note in
+                try store.add(note); selection = .draft; selectedID = note.id
+            }
+        }
         .onChange(of: filtered.map(\.id)) { _, ids in
             if let id = selectedID, !ids.contains(id) { selectedID = nil }
         }
@@ -820,9 +827,9 @@ private struct ZoneMenu: View {
 }
 
 struct NewTicketView: View {
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject var store: TicketStore
-    let existingNotes: [TicketNote]
+    var onClose: () -> Void
+    var onDirtyChange: (Bool) -> Void
     var onSave: (TicketNote) throws -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = ""; @State private var priority: Priority = .low
     @State private var richBody: Data?
@@ -833,7 +840,7 @@ struct NewTicketView: View {
     @StateObject private var fontSizeController = NoteFontSizeController()
     @State private var createdTimeText = CreatedTimeInput.format(Date())
     @State private var saveError: String?
-    private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: existingNotes) }
+    private var duplicateMatches: [TicketNote] { duplicateRITMMatches(ritm, among: store.notes) }
 
     private func saveNote() {
         guard let createdAt = CreatedTimeInput.parse(createdTimeText) else {
@@ -842,7 +849,7 @@ struct NewTicketView: View {
         }
         do {
             try onSave(TicketNote(ritm: ritm.trimmingCharacters(in: .whitespacesAndNewlines), chg: chg.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, stage: .draft, priority: priority, owner: "", richBody: richBody, createdAt: createdAt, trafficFlow: trafficFlow, firewallZones: firewallZones, additionalTrafficFlows: additionalTrafficFlows))
-            dismiss()
+            onClose()
         } catch { saveError = error.localizedDescription }
     }
     var body: some View {
@@ -863,9 +870,14 @@ struct NewTicketView: View {
                 .font(.caption).foregroundStyle(.secondary)
             TrafficFlowsEditor(firstFirewalls: $trafficFlow, firstZones: $firewallZones, additionalFlows: $additionalTrafficFlows, store: store)
             PlanEditorHeading(controller: fontSizeController)
-            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150).border(Color.secondary.opacity(0.25))
-            HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { dismiss() }; Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-        }.padding(24).frame(width: 580)
+            RichNoteEditor(text: $bodyText, richBody: $richBody, fontSize: $bodyFontSize, sizeController: fontSizeController).frame(minHeight: 150, maxHeight: .infinity).border(Color.secondary.opacity(0.25))
+            HStack { SelectionFontSizeControl(controller: fontSizeController); Spacer(); Picker("Priority", selection: $priority) { ForEach(Priority.allCases) { Text($0.title).tag($0) } }; Button("Cancel") { onClose() }.keyboardShortcut(.cancelAction); Button("Save as Draft", action: saveNote).buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command).disabled(ritm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+        }.padding(24).frame(minWidth: 720, minHeight: 480)
+        .onChange(of: [ritm, chg, title, bodyText, priority.rawValue, createdTimeText]) { _, _ in onDirtyChange(true) }
+        .onChange(of: richBody) { _, _ in onDirtyChange(true) }
+        .onChange(of: trafficFlow) { _, _ in onDirtyChange(true) }
+        .onChange(of: firewallZones) { _, _ in onDirtyChange(true) }
+        .onChange(of: additionalTrafficFlows) { _, _ in onDirtyChange(true) }
         .alert("Unable to Save", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK") { saveError = nil } } message: { Text(saveError ?? "") }
     }
 }
@@ -986,7 +998,24 @@ struct EditTicketView: View {
 final class TicketEditorWindows: NSObject, NSWindowDelegate {
     static let shared = TicketEditorWindows()
     private var windows: [UUID: NSWindow] = [:]
-    var hasOpenEditors: Bool { !windows.isEmpty }
+    private var newWindow: NSWindow?
+    var hasOpenEditors: Bool { !windows.isEmpty || newWindow != nil }
+
+    func openNew(store: TicketStore, onSave: @escaping (TicketNote) throws -> Void) {
+        if let newWindow { newWindow.makeKeyAndOrderFront(nil); return }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 640), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "New Ticket Note"
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.contentView = NSHostingView(rootView: NewTicketView(store: store, onClose: { [weak window] in window?.performClose(nil) }, onDirtyChange: { [weak window] dirty in window?.isDocumentEdited = dirty }, onSave: { [weak window] note in
+            try onSave(note)
+            window?.isDocumentEdited = false
+        }).environment(\.locale, Locale(identifier: "en")))
+        window.contentMinSize = NSSize(width: 720, height: 480)
+        newWindow = window
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
 
     func close(_ id: UUID) {
         windows[id]?.close()
@@ -1012,8 +1041,9 @@ final class TicketEditorWindows: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow,
-              let id = windows.first(where: { $0.value === window })?.key else { return }
+        guard let window = notification.object as? NSWindow else { return }
+        if newWindow === window { newWindow = nil; return }
+        guard let id = windows.first(where: { $0.value === window })?.key else { return }
         windows.removeValue(forKey: id)
     }
 

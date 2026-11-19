@@ -10,6 +10,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Possible Traffic Path lists devices present in both result sets, with separate source-side and destination-side evidence. Source-side route matches may describe return routing, not packet ingress; different routing contexts may be unrelated. Candidates do not establish connectivity, direction, traversal order or policy approval.
 - Traffic Lookup groups interface and route results by device. Filter both sides and common-device candidates by device, device type, VRF/routing context and zone; Clear Filters restores all matches. Filters apply after route matching and do not infer a traffic path.
 - Click once to select a ticket; double-click to open a movable, resizable editor.
+- New Ticket Note opens in a movable, resizable window. Closing or quitting with unsaved changes asks before discarding them.
 - The ticket editor uses 18 pt text for the RITM, CHG, and note title inputs.
 - The list has separate Ticket Number and CHG Number columns, followed by Created, Status, Priority, and Notes. All list text and headers use 18 pt; RITM numbers are blue and bold, while CHG numbers use high-contrast primary text with medium weight. Notes shows only the note title; the full body remains available in the editor and search.
 - Sidebar labels and workflow counts use 18 pt.

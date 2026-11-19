@@ -2,6 +2,24 @@ import XCTest
 @testable import TicketOrganizer
 
 final class TrafficLookupTests: XCTestCase {
+    func testTrafficFiltersAndGroupingUseStableDeviceIdentity() throws {
+        let catalog = [FirewallDefinition(id: "a", name: "Router 1", deviceGroup: "", zones: [], isActive: true, deviceType: .router), FirewallDefinition(id: "b", name: "Firewall 2", deviceGroup: "", zones: [], isActive: true)]
+        func record(_ id: String?, _ name: String, _ zone: String, _ vrf: String) -> NetworkRecord {
+            NetworkRecord(kind: .route, firewall: name, firewallID: id, subnet: "10.0.0.0/8", interface: "eth1", zone: zone, router: vrf, nextHop: "", source: "test.csv", row: 2, importedAt: Date())
+        }
+        let first = record("a", "old router name", "Inside", "VRF1")
+        let second = record(nil, "Router 1", "Outside", "VRF1")
+        let third = record("b", "Firewall 2", "inside", "VRF2")
+        let unknown = record(nil, "Legacy device", "Inside", "VRF1")
+        let all = [first, third, second, unknown]
+        let groups = NetworkLookup.groups(all, catalog: catalog)
+        XCTAssertEqual(groups.map(\.device.name), ["Firewall 2", "Legacy device", "Router 1"])
+        XCTAssertEqual(groups.last?.records, [first, second])
+        let filters = NetworkLookup.Filters(device: "id:a", type: "router", router: "vrf1", zone: "INSIDE")
+        XCTAssertEqual(NetworkLookup.filtered(all, using: filters, catalog: catalog), [first])
+        XCTAssertEqual(NetworkLookup.filtered(all, using: .init(type: "unknown"), catalog: catalog), [unknown])
+        XCTAssertEqual(NetworkLookup.filtered(all, using: .init(), catalog: catalog), all)
+    }
     func testInterfaceSubnetMatchesPrecedeRoutesForEachAddress() throws {
         func record(_ kind: NetworkRecordKind, _ device: String, _ subnet: String) -> NetworkRecord {
             NetworkRecord(kind: kind, firewall: device, subnet: subnet, interface: "eth1", zone: "", router: "", nextHop: "", source: "test.csv", row: 2, importedAt: Date())

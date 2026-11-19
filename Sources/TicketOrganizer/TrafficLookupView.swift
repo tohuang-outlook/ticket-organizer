@@ -7,14 +7,18 @@ struct TrafficLookupView: View {
     @ObservedObject var store: TicketStore
     @State private var sourceAddress = ""
     @State private var destinationAddress = ""
+    @State private var filters = NetworkLookup.Filters()
     @State private var importRequest: ImportRequest?
     @State private var error: String?
 
     private var records: [NetworkRecord] { (try? store.networkRecords()) ?? [] }
     var body: some View {
         let allRecords = records
-        let sourceResults = NetworkLookup.matches(sourceAddress, records: allRecords)
-        let destinationResults = NetworkLookup.matches(destinationAddress, records: allRecords)
+        let sourceMatches = NetworkLookup.matches(sourceAddress, records: allRecords)
+        let destinationMatches = NetworkLookup.matches(destinationAddress, records: allRecords)
+        let available = (sourceMatches ?? []) + (destinationMatches ?? [])
+        let sourceResults = sourceMatches.map { NetworkLookup.filtered($0, using: filters, catalog: store.firewalls) }
+        let destinationResults = destinationMatches.map { NetworkLookup.filtered($0, using: filters, catalog: store.firewalls) }
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Traffic Lookup").font(.system(size: 16, weight: .bold))
@@ -30,11 +34,13 @@ struct TrafficLookupView: View {
                 Button("Done") { dismiss() }
             }.font(.system(size: 16))
             if (try? store.networkRecords()) == nil { Text("Unable to read the existing network inventory. No data was changed.").foregroundStyle(.red) }
+            filterControls(available)
+            if filters.isActive { Text("Filters apply to both sides and possible device candidates. Clear filters to see all matches.").foregroundStyle(.secondary) }
             PossibleTrafficPathView(source: sourceResults, destination: destinationResults, firewalls: store.firewalls)
             HStack(alignment: .top, spacing: 16) {
-                TrafficLookupColumn(title: "Source IP", address: $sourceAddress, results: sourceResults, firewalls: store.firewalls)
+                TrafficLookupColumn(title: "Source IP", address: $sourceAddress, results: sourceResults, filtersActive: filters.isActive, firewalls: store.firewalls)
                 Divider()
-                TrafficLookupColumn(title: "Destination IP", address: $destinationAddress, results: destinationResults, firewalls: store.firewalls)
+                TrafficLookupColumn(title: "Destination IP", address: $destinationAddress, results: destinationResults, filtersActive: filters.isActive, firewalls: store.firewalls)
             }
             Text("Source and destination are matched independently; this is not a verified path. Route status, metrics, NAT, PBF, dynamic changes and other devices are not evaluated. An address without a prefix is treated as /32.")
                 .font(.system(size: 16)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -43,6 +49,39 @@ struct TrafficLookupView: View {
         .padding(20).frame(minWidth: 720, minHeight: 520)
         .sheet(item: $importRequest) { request in NetworkImportView(store: store, request: request) }
         .alert("Unable to Import File", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
+    }
+    private func filterControls(_ records: [NetworkRecord]) -> some View {
+        let devices = NetworkLookup.groups(records, catalog: store.firewalls).map(\.device)
+        let routers = values(records.map(\.router), selected: filters.router)
+        let zones = values(records.map(\.zone), selected: filters.zone)
+        return HStack {
+            Text("Filter")
+            Picker("Device", selection: $filters.device) {
+                Text("All Devices").tag("")
+                if !filters.device.isEmpty && !devices.contains(where: { $0.id == filters.device }) { Text("Previously selected device").tag(filters.device) }
+                ForEach(devices) { device in Text(device.name + (device.type.map { " · " + $0.title } ?? " · Unknown type")).tag(device.id) }
+            }.accessibilityLabel("Filter by device")
+            Picker("Type", selection: $filters.type) {
+                Text("All Types").tag("")
+                ForEach(NetworkDeviceType.allCases) { type in Text(type.title).tag(type.rawValue) }
+                Text("Unknown Type").tag("unknown")
+            }.accessibilityLabel("Filter by device type")
+            Picker("VRF", selection: $filters.router) {
+                Text("All VRFs").tag("")
+                ForEach(routers, id: \.self) { value in Text(value).tag(value) }
+            }.accessibilityLabel("Filter by VRF or routing context")
+            Picker("Zone", selection: $filters.zone) {
+                Text("All Zones").tag("")
+                ForEach(zones, id: \.self) { value in Text(value).tag(value) }
+            }.accessibilityLabel("Filter by zone")
+            Button("Clear Filters") { filters = NetworkLookup.Filters() }.disabled(!filters.isActive)
+        }.labelsHidden()
+    }
+    private func values(_ values: [String], selected: String) -> [String] {
+        var seen = Set<String>()
+        return (values + [selected]).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
     private func chooseFile(_ kind: NetworkRecordKind) {
         let panel = NSOpenPanel()
@@ -112,6 +151,7 @@ private struct TrafficLookupColumn: View {
     let title: String
     @Binding var address: String
     let results: [NetworkRecord]?
+    let filtersActive: Bool
     let firewalls: [FirewallDefinition]
 
     var body: some View {
@@ -128,7 +168,7 @@ private struct TrafficLookupColumn: View {
                 ContentUnavailableView("Enter \(title)", systemImage: "magnifyingglass", description: Text("Enter an IPv4 address or subnet."))
             } else if let results {
                 if results.isEmpty {
-                    ContentUnavailableView("No matching records", systemImage: "network.slash", description: Text("Check the input and imported data."))
+                    ContentUnavailableView("No matching records", systemImage: "network.slash", description: Text(filtersActive ? "No results match the selected filters. Clear filters to see all matches." : "Check the input and imported data."))
                 } else {
                     let interfaces = results.filter { $0.kind == .interface }
                     let routes = results.filter { $0.kind == .route }
@@ -137,14 +177,14 @@ private struct TrafficLookupColumn: View {
                             if interfaces.isEmpty {
                                 Text("No imported interface subnet contains this address.").foregroundStyle(.secondary)
                             } else {
-                                ForEach(interfaces) { record in resultRow(record) }
+                                ForEach(NetworkLookup.groups(interfaces, catalog: firewalls)) { group in groupedRows(group) }
                             }
                         } header: {
                             Text("Interface subnet matches (\(interfaces.count))").font(.system(size: 16, weight: .semibold))
                         }
                         if !routes.isEmpty {
                             Section {
-                                ForEach(routes) { record in resultRow(record) }
+                                ForEach(NetworkLookup.groups(routes, catalog: firewalls)) { group in groupedRows(group) }
                             } header: {
                                 Text("Route matches (\(routes.count))").font(.system(size: 16, weight: .semibold))
                             }
@@ -155,6 +195,13 @@ private struct TrafficLookupColumn: View {
                 ContentUnavailableView("Invalid IPv4 address or subnet", systemImage: "exclamationmark.triangle", description: Text("Use an IPv4 address or CIDR subnet."))
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    private func groupedRows(_ group: NetworkLookup.DeviceGroup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(group.device.name + (group.device.type.map { " · " + $0.title } ?? " · Unknown type") + " (\(group.records.count))")
+                .font(.system(size: 16, weight: .bold))
+            ForEach(group.records) { record in resultRow(record) }
+        }.padding(.vertical, 4)
     }
     private func resultRow(_ record: NetworkRecord) -> some View {
         VStack(alignment: .leading, spacing: 5) {

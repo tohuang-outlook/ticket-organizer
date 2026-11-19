@@ -146,6 +146,50 @@ struct NetworkColumnMap {
     }
 }
 struct NetworkLookup {
+    struct Device: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let type: NetworkDeviceType?
+    }
+    struct DeviceGroup: Identifiable {
+        let device: Device
+        let records: [NetworkRecord]
+        var id: String { device.id }
+    }
+    struct Filters {
+        var device = "", type = "", router = "", zone = ""
+        var isActive: Bool { !device.isEmpty || !type.isEmpty || !router.isEmpty || !zone.isEmpty }
+    }
+
+    static func device(for record: NetworkRecord, catalog: [FirewallDefinition]) -> Device {
+        let match: FirewallDefinition?
+        if let id = record.firewallID {
+            match = catalog.first { $0.id == id }
+        } else {
+            let names = catalog.filter { $0.name.caseInsensitiveCompare(record.firewall) == .orderedSame || $0.id.caseInsensitiveCompare(record.firewall) == .orderedSame }
+            match = names.count == 1 ? names[0] : nil
+        }
+        if let match { return Device(id: "id:" + match.id, name: match.name, type: match.effectiveDeviceType) }
+        return Device(id: record.firewallID.map { "id:" + $0 } ?? "name:" + record.firewall.lowercased(), name: record.firewall, type: nil)
+    }
+    static func filtered(_ records: [NetworkRecord], using filters: Filters, catalog: [FirewallDefinition]) -> [NetworkRecord] {
+        records.filter { record in
+            let resolved = device(for: record, catalog: catalog)
+            return (filters.device.isEmpty || filters.device == resolved.id)
+                && (filters.type.isEmpty || filters.type == (resolved.type?.rawValue ?? "unknown"))
+                && (filters.router.isEmpty || record.router.caseInsensitiveCompare(filters.router) == .orderedSame)
+                && (filters.zone.isEmpty || record.zone.caseInsensitiveCompare(filters.zone) == .orderedSame)
+        }
+    }
+    static func groups(_ records: [NetworkRecord], catalog: [FirewallDefinition]) -> [DeviceGroup] {
+        let grouped = Dictionary(grouping: records, by: { device(for: $0, catalog: catalog).id })
+        return grouped.values.compactMap { records in
+            records.first.map { DeviceGroup(device: device(for: $0, catalog: catalog), records: records) }
+        }.sorted {
+            let order = $0.device.name.localizedStandardCompare($1.device.name)
+            return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
+        }
+    }
     struct Candidate: Identifiable {
         let id: String
         let name: String

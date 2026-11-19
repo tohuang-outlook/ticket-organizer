@@ -215,6 +215,7 @@ struct ContentView: View {
     @State private var query = ""
     @State private var showNew = false
     @State private var showTrafficLookup = false
+    @State private var showScreenshotImport = false
     @State private var priority: Priority? = nil
     @State private var newestFirst = false
     private var filtered: [TicketNote] {
@@ -251,7 +252,7 @@ struct ContentView: View {
             Sidebar(store: store, selection: $selection, showNew: $showNew, onMoved: { selectedID = $0 })
         } detail: {
             VStack(spacing: 0) {
-                HStack { Button("Traffic Lookup") { showTrafficLookup = true }; Spacer(); CloudSyncStatusView(sync: store.cloudSync) }.padding(.horizontal, 28).padding(.top, 12)
+                HStack { Button("Traffic Lookup") { showTrafficLookup = true }; Button("Compare Screenshot") { showScreenshotImport = true }; Spacer(); CloudSyncStatusView(sync: store.cloudSync) }.padding(.horizontal, 28).padding(.top, 12)
                 HStack { VStack(alignment: .leading, spacing: 4) { Text(selection?.title ?? "Open Notes").font(.system(size: 48, weight: .bold)); Text("Keep RITM, CHG, and implementation notes together. Send them for approval when ready.").foregroundStyle(.secondary).font(.system(size: 14)) }; Spacer(); Button { showNew = true } label: { Label("New Note", systemImage: "plus") }.buttonStyle(.borderedProminent) }.padding(28)
                 Divider()
                 HStack { TextField("Search RITM, CHG, or notes", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 300); Picker("Priority", selection: $priority) { Text("All Priorities").tag(nil as Priority?); ForEach(Priority.allCases) { Text($0.title).tag(Optional($0)) } }.frame(width: 140); Spacer(); Text("\(filtered.count) notes").foregroundStyle(.secondary).font(.caption)
@@ -297,6 +298,7 @@ struct ContentView: View {
             Text("\(note.ritm) / \(note.chg) will be permanently deleted. This action cannot be undone.")
         }
         .sheet(isPresented: $showTrafficLookup) { TrafficLookupView(store: store) }
+        .sheet(isPresented: $showScreenshotImport) { ScreenshotTicketImportView(store: store) { selection = .draft; selectedID = nil } }
         .onChange(of: filtered.map(\.id)) { _, ids in
             if let id = selectedID, !ids.contains(id) { selectedID = nil }
         }

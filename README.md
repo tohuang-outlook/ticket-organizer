@@ -17,6 +17,7 @@ A native, offline macOS app for organizing RITM and CHG ticket notes. Requires m
 - Drag a ticket onto a workflow in the sidebar to move it. The target highlights on hover; successful drops save immediately and open the destination list.
 - Type the Created date and time directly when adding a note (`yyyy-MM-dd HH:mm:ss`, local time), or click Now. Invalid dates cannot be saved.
 - Drafts require only an RITM number; CHG, title, and body can be filled in later.
+- Compare Screenshot reads an image locally using macOS text recognition and offers an editable review of RITM numbers and Created times. Review all OCR results; enter missing dates manually. It checks all existing tickets including Closed, and creates selected, valid new entries together as Low-priority drafts. Times use this Mac's local time. The image and extracted text are not uploaded or stored; only confirmed ticket fields are saved.
 - Warn when an entered RITM already exists, with the matching CHG, status, and title. The warning does not block intentional duplicates.
 - Label the large note editor “Change, Backout, and Validation Plan” in new and edit windows.
 - Device selection text uses 16 pt; the device path uses 22 pt bold text.

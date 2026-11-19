@@ -152,6 +152,21 @@ final class TicketStore: ObservableObject {
         try commit(next, localChange: true)
     }
 
+    func importDrafts(_ drafts: [TicketNote]) throws {
+        guard !drafts.isEmpty else { return }
+        var names = Set(notes.map { $0.ritm.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() })
+        var next = archive
+        for draft in drafts {
+            let number = draft.ritm.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard ScreenshotTicketParser.validNumber(number), draft.stage == .draft,
+                  names.insert(number).inserted, next.records[draft.id.uuidString] == nil else {
+                throw ScreenshotImportError.duplicateOrInvalid
+            }
+            next.records[draft.id.uuidString] = TicketSyncRecord(note: draft)
+        }
+        try commit(next, localChange: true)
+    }
+
     func update(_ note: TicketNote, originalStage: TicketStage? = nil, originalIsImportant: Bool? = nil) throws {
         guard var record = archive.records[note.id.uuidString], let current = record.note else { throw StoreError.missingTicket }
         // Prevent a stale open editor from overwriting changes received from another Mac.

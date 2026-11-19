@@ -1,6 +1,7 @@
 import AppKit
 
 enum DefaultTicketTemplate {
+    static let fontSize = 20
     static let text = """
     —————————————————————————————————
     On Panorama, Device Group: QUINCY_UCSF
@@ -29,8 +30,8 @@ enum DefaultTicketTemplate {
     """
 
     static func richText() -> Data? {
-        let font = NSFont.systemFont(ofSize: 16)
-        let bold = NSFont.boldSystemFont(ofSize: 16)
+        let font = NSFont.systemFont(ofSize: CGFloat(fontSize))
+        let bold = NSFont.boldSystemFont(ofSize: CGFloat(fontSize))
         let value = NSMutableAttributedString(string: text, attributes: [.font: font])
         let string = text as NSString
         for phrase in ["On Panorama, Device Group: QUINCY_UCSF", "shared", "QUINCY_UCSF", "Backout Plan:", "panorama"] {
@@ -41,6 +42,12 @@ enum DefaultTicketTemplate {
                 value.addAttribute(.font, value: bold, range: found)
                 let next = NSMaxRange(found)
                 remaining = NSRange(location: next, length: string.length - next)
+            }
+        }
+        for phrase in ["- Source zone:", "- Destination zone:"] {
+            let range = string.range(of: phrase)
+            if range.location != NSNotFound {
+                value.addAttributes([.font: bold, .foregroundColor: NSColor.red], range: range)
             }
         }
         return try? value.data(from: NSRange(location: 0, length: value.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])

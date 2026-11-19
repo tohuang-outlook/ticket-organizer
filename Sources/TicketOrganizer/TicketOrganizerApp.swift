@@ -833,7 +833,7 @@ struct NewTicketView: View {
     var onSave: (TicketNote) throws -> Void
     @State private var ritm = ""; @State private var chg = ""; @State private var title = ""; @State private var bodyText = DefaultTicketTemplate.text; @State private var priority: Priority = .low
     @State private var richBody: Data? = DefaultTicketTemplate.richText()
-    @State private var bodyFontSize = 16
+    @State private var bodyFontSize = DefaultTicketTemplate.fontSize
     @State private var trafficFlow = TicketNote.trafficFlowSlots([])
     @State private var firewallZones = TicketNote.zoneSlots([])
     @State private var additionalTrafficFlows: [TicketTrafficFlow] = []

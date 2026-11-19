@@ -14,8 +14,19 @@ final class RichTextTests: XCTestCase {
             XCTAssertNotEqual(range.location, NSNotFound)
             let font = try XCTUnwrap(restored.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)
             XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
-            XCTAssertEqual(font.pointSize, 16)
+            XCTAssertEqual(font.pointSize, 20)
         }
+        for phrase in ["- Source zone:", "- Destination zone:"] {
+            let range = (restored.string as NSString).range(of: phrase)
+            let font = try XCTUnwrap(restored.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)
+            let color = try XCTUnwrap((restored.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor)?.usingColorSpace(.sRGB))
+            XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+            XCTAssertEqual(font.pointSize, 20)
+            XCTAssertGreaterThan(color.redComponent, 0.9)
+            XCTAssertLessThan(color.greenComponent, 0.1)
+            XCTAssertLessThan(color.blueComponent, 0.1)
+        }
+        XCTAssertEqual(RichNoteEditor.preferredFontSize(from: data), 20)
     }
     @MainActor
     func testSelectedRedTextSurvivesSaveAndCanBeUndone() throws {
